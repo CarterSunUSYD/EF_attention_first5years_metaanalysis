@@ -1,0 +1,2202 @@
+---
+title: "Attention EF Paper"
+author: "CarterSun"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,message=FALSE,warning=FALSE)
+```
+
+# - - - - - - - - - - - - - - -
+
+# - PREPARE WORKSPACE ---
+
+# - - - - - - - - - - - - - - -
+
+```{r preparation}
+rm(list = ls())
+graphics.off()
+
+requiredlibraries <- c("metafor","readxl","RoBMA","TOSTER","dplyr")
+
+# loop over required libraries and install if not present, dependencies might have to be installed manually
+for (i in requiredlibraries) {
+  if (!(i %in% rownames(installed.packages()))) install.packages(i, dependencies = TRUE)
+}
+# loop over required libraries to load
+for (i in requiredlibraries) {
+  current_lib <- i
+  if (!i=="meta"){
+    library(current_lib, character.only=TRUE)}
+}
+library(meta)
+# library(dmetar)
+
+```
+
+# - - - - - - - - - - - - - - -
+
+# - Load Excel Files ---
+
+# - - - - - - - - - - - - - - -
+
+```{r, results='hide' }
+
+getwd()
+setwd('path_to_datafile/')
+original_data <- read_excel("Data_Extraction_Form_nesting.xlsx","Data Input New Studies")
+# View(original_data)
+colnames(original_data) ## get all column names
+## Exclude study due to repeat sample across studies
+repeat_studies_id_exclude <-c("22","23","24","25","26","99","131","188","268")
+original_data <- original_data[!(original_data$`Study No.` %in% repeat_studies_id_exclude), ]
+
+## Exclude study due to not meet inclusion criteria
+notmeet_criteria_studies_id_exclude <-c("277","136","254")
+original_data <- original_data[!(original_data$`Study No.` %in% notmeet_criteria_studies_id_exclude), ]
+
+# Exclude not 0-5 age
+original_data <- original_data[(original_data$`Age group: 0-5 vs. 5-6`== "0-5"), ]
+
+# #separate Clinical Conditions (1-3)
+clinicalcondition_1_control <- original_data[,c("Study No." ,"Study_year","Type of Study (Cohort, Cross-sectional, Longitudinal, RCT etc)", "Comparison vs. prediction","Age group: 0-5 vs. 5-6","Age group", "executive function vs. attention","Test Name","Domain (e.g., sustained attention, selective attention, working memory, response inhibition etc)","Outcome variable (subtests/subdomain)","Accuracy/Response time (ms)/Behav rating/physiological/preference","Type of measure (i.e., biological, behavioural, rating form)", "NDDx1 diagnosis","Main NDDx1 Diagnostic Tool(s)","NDDx1 Mean","NDDx1 Std-Dev","NDDx1 SE","NDDx1 Sample size","Control Mean","Control Std-Dev","Control SE","Control Sample size","Effect direction (NDDx1)","Age NDDx 1 Years (Mean)","Age Control Years (Mean)","Gender (% NDDx1  of Males)","NDDx1 IQ Mean)","NDDx1 IQ (SD)","Control IQ (Mean)","Control IQ (SD)","IQ Type","IQ test","Comparison Group","Gender","Assessment Tool Type (psychometric, experimental, questionnaire, interview)","Assesment Tool Administration Format","Mode of Assessment","Stimulus Presentation Format","Participant Processing Mode","Participant Response Mode","IQ Difference Significant","Language age Difference Significant","Matching Variable", "DSM/ICD edition NDDx1", "NDDx1 diagnosis_code","ToM_code","Domain_code")]
+before_exclusion_clinicalcondition_1_control<-clinicalcondition_1_control
+remove_patterns <-c('NA','not reported')
+clinicalcondition_1_control<-(clinicalcondition_1_control[!grepl(paste(remove_patterns,collapse='|'),clinicalcondition_1_control$`NDDx1 Mean`),])
+clinicalcondition_1_control <- clinicalcondition_1_control[!(clinicalcondition_1_control$`NDDx1 Mean` == "" | is.na(clinicalcondition_1_control$`NDDx1 Mean`)), ]
+
+clinicalcondition_2_control <- original_data[,c("Study No." ,"Study_year","Type of Study (Cohort, Cross-sectional, Longitudinal, RCT etc)", "Comparison vs. prediction","Age group: 0-5 vs. 5-6","Age group", "executive function vs. attention","Test Name","Domain (e.g., sustained attention, selective attention, working memory, response inhibition etc)","Outcome variable (subtests/subdomain)","Accuracy/Response time (ms)/Behav rating/physiological/preference","Type of measure (i.e., biological, behavioural, rating form)", "NDDx2 diagnosis","Main NDDx2 Diagnostic Tool(s)","NDDx2 Mean","NDDx2 Std-Dev","NDDx2 SE","NDDx2 Sample size","Control Mean","Control Std-Dev","Control SE","Control Sample size","Effect direction (NDDx2)","Age NDDx 2 Years (Mean)","Age Control Years (Mean)","Gender (% NDDx2 of Males)","NDDx2 IQ Mean)","NDDx2 IQ (SD)","Control IQ (Mean)","Control IQ (SD)","IQ Type","IQ test","Comparison Group","Gender","Assessment Tool Type (psychometric, experimental, questionnaire, interview)","Assesment Tool Administration Format","Mode of Assessment","Stimulus Presentation Format","Participant Processing Mode","Participant Response Mode","IQ Difference Significant","Language age Difference Significant","Matching Variable", "DSM/ICD edition NDDx2", "NDDx2 diagnosis_code","ToM_code","Domain_code")]
+before_exclusion_clinicalcondition_2_control<-clinicalcondition_2_control
+clinicalcondition_2_control<-(clinicalcondition_2_control[!grepl(paste(remove_patterns,collapse='|'),clinicalcondition_2_control$`NDDx2 Mean`),])
+clinicalcondition_2_control <- clinicalcondition_2_control[!(clinicalcondition_2_control$`NDDx2 Mean` == "" | is.na(clinicalcondition_2_control$`NDDx2 Mean`)), ]
+
+
+clinicalcondition_3_control <- original_data[,c("Study No.","Study_year","Type of Study (Cohort, Cross-sectional, Longitudinal, RCT etc)","Comparison vs. prediction","Age group: 0-5 vs. 5-6","Age group", "executive function vs. attention","Test Name","Domain (e.g., sustained attention, selective attention, working memory, response inhibition etc)","Outcome variable (subtests/subdomain)","Accuracy/Response time (ms)/Behav rating/physiological/preference","Type of measure (i.e., biological, behavioural, rating form)", "NDDx3 diagnosis","Main NDDx3 Diagnostic Tool(s)","NDDx3 Mean","NDDx3 Std-Dev","NDDx3 SE","NDDx3 Sample size","Control Mean","Control Std-Dev","Control SE","Control Sample size","Effect direction (NDDx3)","Age NDDx 3 Years (Mean)","Age Control Years (Mean)","Gender (% NDDx3 of Males)","NDDx3 IQ Mean)","NDDx3 IQ (SD)","Control IQ (Mean)","Control IQ (SD)","IQ Type","IQ test","Comparison Group","Gender","Assessment Tool Type (psychometric, experimental, questionnaire, interview)","Assesment Tool Administration Format","Mode of Assessment","Stimulus Presentation Format","Participant Processing Mode","Participant Response Mode","IQ Difference Significant","Language age Difference Significant","Matching Variable", "DSM/ICD edition NDDx3", "NDDx3 diagnosis_code","ToM_code","Domain_code")]
+before_exclusion_clinicalcondition_3_control<-clinicalcondition_3_control
+
+
+clinicalcondition_3_control<-(clinicalcondition_3_control[!grepl(paste(remove_patterns,collapse='|'),clinicalcondition_3_control$`NDDx3 Mean`),])
+clinicalcondition_3_control <- clinicalcondition_3_control[!(clinicalcondition_3_control$`NDDx3 Mean` == "" | is.na(clinicalcondition_3_control$`NDDx3 Mean`)), ]
+
+
+#combine overall conditions
+clinicalcondition_1_control_temp = setNames(clinicalcondition_1_control, c("Study No." ,"Study_year","Type of Study", "comparison vs prediction","Age group","Age group broader", "EF_Attention","Test Name","Domain","Outcome variable","Accuracy/Response time (ms)/Behav rating/physiological/preference","Type of measure (i.e., biological, behavioural, rating form)", "NDDx diagnosis","Main NDDx Diagnostic Tool(s)","NDDx Mean","NDDx Std-Dev","NDDx SE","NDDx Sample size","Control Mean","Control Std-Dev","Control SE","Control Sample size","Effect direction (NDDx)","Age NDDx Years (Mean)","Age Control Years (Mean)","Gender (% NDDx of Males)","NDDx IQ Mean)","NDDx IQ (SD)","Control IQ (Mean)","Control IQ (SD)","IQ Type","IQ test","Comparison Group","Gender","Assessment Tool Type (psychometric, experimental, questionnaire, interview)","Assesment Tool Administration Format","Mode of Assessment","Stimulus Presentation Format","Participant Processing Mode","Participant Response Mode","IQ Difference Significant","Language age Difference Significant","Matching Variable", "DSM/ICD edition NDDx","NDDx_Diagnosis_code","ToM_code","Domain_code"))
+clinicalcondition_2_control_temp = setNames(clinicalcondition_2_control, c("Study No." ,"Study_year","Type of Study",  "comparison vs prediction","Age group","Age group broader", "EF_Attention","Test Name","Domain","Outcome variable","Accuracy/Response time (ms)/Behav rating/physiological/preference","Type of measure (i.e., biological, behavioural, rating form)", "NDDx diagnosis","Main NDDx Diagnostic Tool(s)","NDDx Mean","NDDx Std-Dev","NDDx SE","NDDx Sample size","Control Mean","Control Std-Dev","Control SE","Control Sample size","Effect direction (NDDx)","Age NDDx Years (Mean)","Age Control Years (Mean)","Gender (% NDDx of Males)","NDDx IQ Mean)","NDDx IQ (SD)","Control IQ (Mean)","Control IQ (SD)","IQ Type","IQ test","Comparison Group","Gender","Assessment Tool Type (psychometric, experimental, questionnaire, interview)","Assesment Tool Administration Format","Mode of Assessment","Stimulus Presentation Format","Participant Processing Mode","Participant Response Mode","IQ Difference Significant","Language age Difference Significant","Matching Variable", "DSM/ICD edition NDDx","NDDx_Diagnosis_code","ToM_code","Domain_code"))
+clinicalcondition_3_control_temp = setNames(clinicalcondition_3_control, c("Study No." ,"Study_year","Type of Study",  "comparison vs prediction","Age group","Age group broader", "EF_Attention","Test Name","Domain","Outcome variable","Accuracy/Response time (ms)/Behav rating/physiological/preference","Type of measure (i.e., biological, behavioural, rating form)", "NDDx diagnosis","Main NDDx Diagnostic Tool(s)","NDDx Mean","NDDx Std-Dev","NDDx SE","NDDx Sample size","Control Mean","Control Std-Dev","Control SE","Control Sample size","Effect direction (NDDx)","Age NDDx Years (Mean)","Age Control Years (Mean)","Gender (% NDDx of Males)","NDDx IQ Mean)","NDDx IQ (SD)","Control IQ (Mean)","Control IQ (SD)","IQ Type","IQ test","Comparison Group","Gender","Assessment Tool Type (psychometric, experimental, questionnaire, interview)","Assesment Tool Administration Format","Mode of Assessment","Stimulus Presentation Format","Participant Processing Mode","Participant Response Mode","IQ Difference Significant","Language age Difference Significant","Matching Variable", "DSM/ICD edition NDDx","NDDx_Diagnosis_code","ToM_code","Domain_code"))
+All_clinicalcondition_with_control <- Reduce(function(x, y) merge(x, y, all=TRUE),
+                                               list(clinicalcondition_1_control_temp, clinicalcondition_2_control_temp, clinicalcondition_3_control_temp))
+All_clinicalcondition_with_control[complete.cases(All_clinicalcondition_with_control), ] #remove missing values
+rm(clinicalcondition_1_control_temp,clinicalcondition_2_control_temp,clinicalcondition_3_control_temp)
+# View(All_clinicalcondition_with_control)
+# writexl::write_xlsx(All_clinicalcondition_with_control,"cleanedtable_all_clinicalcondition_with_control_just_removed_outliers.xlsx", col_names = TRUE)
+
+cross_sectional <-All_clinicalcondition_with_control %>% filter(All_clinicalcondition_with_control$`comparison vs prediction`=="c")
+
+
+# writexl::write_xlsx(cross_sectional,"cleanedtable_clinicalcondition_with_control_crosssectional_only_just_removed_outliers.xlsx", col_names = TRUE)
+notcross_sectional <-All_clinicalcondition_with_control %>% filter(All_clinicalcondition_with_control$`comparison vs prediction`!="c")
+
+# writexl::write_xlsx(notcross_sectional,"cleanedtable_clinicalcondition_with_control_not_crosssectional_just_removed_outliers.xlsx", col_names = TRUE)
+
+
+```
+
+# --
+
+# NDDx Effect Size Calculation
+
+# --
+
+# SE to STD Function
+
+```{r}
+convert_se_to_std <- function(se,n){
+  if (is.na(se) || se =="Not Reported" || se == "NA"){
+    return(se)
+  } else {
+      return(se*sqrt(n))
+  }
+}
+```
+
+# Cohen's d to Hedge's g Conversion
+```{r}
+hedges_g <- function(d, totaln) {
+  correction_factor <- 1 - (3 / (4 * totaln - 9))
+  g <- d * correction_factor
+  return(g)
+}
+```
+
+# I-squared calculation Function
+
+```{r}
+I_squared <- function(tau2_value, sigma2_value){
+  score <-sqrt(tau2_value / (tau2_value + sigma2_value)) *100
+  output<-sprintf("%.2f%%",score)
+  return( output)
+
+}
+```
+# p-value reformatting
+
+```{r}
+
+p_value <- function(pooled_pval){
+  p_value <- ifelse(
+                    pooled_pval < 0.001,"<0.001", sprintf("%.3f", pooled_pval)
+  )
+  return (p_value)
+}
+
+```
+# Define All Types of Labels Here for Forest Plots
+
+```{r}
+### Numeric to String Label (Age group)
+age_definitions <-c("Infants","Toddlers","Preschool")
+age_string <-function(age_int){
+  if (age_int >= 1 && age_int <= length(age_definitions)) {
+      return(age_definitions[age_int])
+  } else {
+      return("Unknown Age Group")
+  }
+}
+
+### Numeric to String Label (Domain Labels)
+domain_definitions <- c(
+  "Complex Working Memory", "Simple Response Inhibition",
+  "Complex Response Inhibition", "Response Shifting", "Attention Shifting",
+  "Higher-order EF", "Inhibit/Impulsivity/Inhibitory Control", "Shift", "Emotional Control",
+  "Working Memory", "Plan/Organize", "Inhibitory Self-control", "Flexibility",
+  "Emergent Metacognition", "Global Executive Function/Effortful Control","Simple Working Memory"
+)
+domain_string <-function(domain_int){
+  if (domain_int >= 1 && domain_int <= length(domain_definitions)) {
+    return(domain_definitions[domain_int])
+  } else {
+    return("Unknown Domain Group")
+  }
+}
+
+### Numeric to String Label (NDDx Diagnisis Code Labels)
+NDDX_definitions <- c(
+  "IDD", "Communication Disorders","ASD","ADHD","Specific Learning Disorder",
+  "Motor Disorders","Genetic Disorders","FASD","Cerebral Palsy","Comorbid NDDs","High-risk ASD","Mixed NDDs",
+  "Comorbid NDD + non-NDD","High-risk ADHD","High-risk Communication Disorder","High-risk ASD + High-risk ADHD","High-risk FASD"
+)
+NDDx_string <-function(nddxcode_int){
+  if (nddxcode_int >= 1 && nddxcode_int <= length(NDDX_definitions)) {
+    return(NDDX_definitions[nddxcode_int])
+  } else {
+    return("Unknown NDDx Group")
+  }
+}
+```
+## Step 0: remove row if std/sample size is not reported
+
+```{r}
+# Remove rows with both "Not Reported" or "NA" values in std and se columns
+filtered_All_clinicalcondition_cross_sectionalonly <- cross_sectional[!((cross_sectional$`NDDx Std-Dev`== "Not Reported" & cross_sectional$`NDDx SE` == "Not Reported") | (is.na(cross_sectional$`NDDx Std-Dev`) & is.na(cross_sectional$`NDDx SE`))), ]
+
+filtered_All_clinicalcondition_with_control_cross_sectionalonly <- filtered_All_clinicalcondition_cross_sectionalonly[!((filtered_All_clinicalcondition_cross_sectionalonly$`Control Std-Dev`== "Not Reported" & filtered_All_clinicalcondition_cross_sectionalonly$`Control SE` == "Not Reported") |( is.na(filtered_All_clinicalcondition_cross_sectionalonly$`Control Std-Dev`) & is.na(filtered_All_clinicalcondition_cross_sectionalonly$`Control SE`))), ]
+
+
+checking_columns <- c("NDDx Mean", "NDDx Std-Dev", "NDDx Sample size","Control Mean","Control Std-Dev","Control Sample size")
+missing_std_NDDx <-is.na(filtered_All_clinicalcondition_with_control_cross_sectionalonly$`NDDx Std-Dev`) | filtered_All_clinicalcondition_with_control_cross_sectionalonly$`NDDx Std-Dev` == "Not Reported" | filtered_All_clinicalcondition_with_control_cross_sectionalonly$`NDDx Std-Dev` == "NA"
+
+# ## convert string to numeric format
+# 
+i<-c(15:30)
+filtered_All_clinicalcondition_with_control_cross_sectionalonly[,i]<-apply(filtered_All_clinicalcondition_with_control_cross_sectionalonly[,i],2,function(x) as.numeric(as.character(x)))
+i<-c(45:47)
+filtered_All_clinicalcondition_with_control_cross_sectionalonly[,i]<-apply(filtered_All_clinicalcondition_with_control_cross_sectionalonly[,i],2,function(x) as.numeric(as.character(x)))
+
+# View(filtered_All_clinicalcondition_with_control_cross_sectionalonly)
+## convert se to std if std was not originally reported
+filtered_All_clinicalcondition_with_control_cross_sectionalonly$`NDDx Std-Dev`[missing_std_NDDx] <- mapply(convert_se_to_std, filtered_All_clinicalcondition_with_control_cross_sectionalonly$`NDDx SE`[missing_std_NDDx], filtered_All_clinicalcondition_with_control_cross_sectionalonly$`NDDx Sample size`[missing_std_NDDx])
+
+missing_std_control <-is.na(filtered_All_clinicalcondition_with_control_cross_sectionalonly$`Control Std-Dev`) | filtered_All_clinicalcondition_with_control_cross_sectionalonly$`Control Std-Dev` == "Not Reported" | filtered_All_clinicalcondition_with_control_cross_sectionalonly$`Control Std-Dev` == "NA"
+
+filtered_All_clinicalcondition_with_control_cross_sectionalonly$`Control Std-Dev`[missing_std_control] <- mapply(convert_se_to_std,filtered_All_clinicalcondition_with_control_cross_sectionalonly$`Control SE`[missing_std_control], filtered_All_clinicalcondition_with_control_cross_sectionalonly$`Control Sample size`[missing_std_control])
+
+
+filtered_all_NDDx_control <- filtered_All_clinicalcondition_with_control_cross_sectionalonly[!(rowSums(is.na(filtered_All_clinicalcondition_with_control_cross_sectionalonly[checking_columns]) | filtered_All_clinicalcondition_with_control_cross_sectionalonly[checking_columns] == "Not reported" | filtered_All_clinicalcondition_with_control_cross_sectionalonly[checking_columns] == "NA") > 0), ]
+
+missing_afterconversion_all_NDDx_control <- filtered_All_clinicalcondition_with_control_cross_sectionalonly[(rowSums(is.na(filtered_All_clinicalcondition_with_control_cross_sectionalonly[checking_columns]) | filtered_All_clinicalcondition_with_control_cross_sectionalonly[checking_columns] == "Not reported" | filtered_All_clinicalcondition_with_control_cross_sectionalonly[checking_columns] == "NA") > 0), ]
+
+# View(missing_afterconversion_all_NDDx_control)
+```
+## Step 1: Calculate effect sizes of cross-sectional studies and split data for analysis
+### Note: All changes made were saved in an excel file for cross-checking
+
+```{r, results='hide'}
+NDDx_control_EffectSize<- escalc(measure="SMD", m1i=filtered_all_NDDx_control$`NDDx Mean`, sd1i=filtered_all_NDDx_control$`NDDx Std-Dev`, n1i=filtered_all_NDDx_control$`NDDx Sample size`, m2i=filtered_all_NDDx_control$`Control Mean`,sd2i=filtered_all_NDDx_control$`Control Std-Dev`,n2i=filtered_all_NDDx_control$`Control Sample size`,
+                                        slab=paste(filtered_all_NDDx_control$`Study No.`,sep=""))
+new_yi <- NDDx_control_EffectSize$yi
+
+
+for (i in 1:length(new_yi)){
+  if(filtered_all_NDDx_control$`Effect direction (NDDx)`[i] == 1 && new_yi[i] < 0){
+    new_yi[i] = -new_yi[i]
+  } else if(filtered_all_NDDx_control$`Effect direction (NDDx)`[i] == 2 && new_yi[i] > 0){
+    new_yi[i] = -new_yi[i]
+  } #else keep new_yi unchanged (1 - positive, 2- negative, 3- no mean differences)
+}
+filtered_all_NDDx_control$yi <- new_yi
+filtered_all_NDDx_control$vi <-NDDx_control_EffectSize$vi
+
+
+NDDx_summary <- escalc(yi=yi,vi=vi,data=filtered_all_NDDx_control)
+# View(NDDx_summary)
+
+# writexl::write_xlsx(NDDx_summary,"NDDx_control_effectsizes_just_removed_outliers.xlsx",col_names=TRUE)
+
+NDDx_summary_ef <-NDDx_summary%>% filter(NDDx_summary$EF_Attention == "executive function")
+
+## level 1 (sub-scales are not included for the overall study effects)
+
+ef_level1<-c("global executive function","effortful control")
+# NDDx_summary_ef_behaviour_biological_global_effortforcontrol <- NDDx_summary_ef[(NDDx_summary_ef$`Domain (e.g., sustained attention, selective attention, working memory, response inhibition etc)` %in% ef_level1), ] 
+
+# Behavioural is study all to be included, for rating form (only global executive function and eefortful control are included in all future analysis) -EF studies
+strings_to_match <- c( "behavioural","Behavioural")
+strings_rf <- c( "rating form")
+
+NDDx_summary_ef_only_behavioural <- NDDx_summary_ef[
+  grepl(paste(strings_to_match, collapse = "|"), NDDx_summary_ef$Type.of.measure..i.e...biological..behavioural..rating.form., ignore.case = TRUE), ]
+
+NDDx_summary_ef_level1_and_behaviour <- NDDx_summary_ef[
+  grepl(paste(strings_to_match, collapse = "|"), NDDx_summary_ef$Type.of.measure..i.e...biological..behavioural..rating.form., ignore.case = TRUE) |
+  NDDx_summary_ef$`Domain` %in% ef_level1,]
+
+NDDx_summary_ef_level1_and_behaviour_attention_combined <- NDDx_summary[
+  grepl(paste(strings_to_match, collapse = "|"), NDDx_summary$Type.of.measure..i.e...biological..behavioural..rating.form., ignore.case = TRUE) |
+  NDDx_summary$`Domain` %in% ef_level1,]
+#level 2 means all subscales (not global and effortforcontrol) in rating form only EF Studies
+# NDDx_summary_ef_exclude_global_effortforcontrol <- NDDx_summary_ef_ratingform[!(NDDx_summary_ef_ratingform$`Domain` %in% ef_level1), ] 
+
+
+NDDx_summary_ef_ratingform<-NDDx_summary_ef[(NDDx_summary_ef$`Type.of.measure..i.e...biological..behavioural..rating.form.` %in% strings_rf),]
+NDDx_summary_ef_ratingform_level1<-NDDx_summary_ef_level1_and_behaviour[(NDDx_summary_ef_level1_and_behaviour$`Type.of.measure..i.e...biological..behavioural..rating.form.` %in% strings_rf),]
+
+NDDx_summary_ef_level2 <- NDDx_summary_ef_ratingform[!(NDDx_summary_ef_ratingform$`Domain` %in% ef_level1),]
+
+domain_subscales <-c(7,8,9,10,11)
+NDDx_summary_ef_ratingform_subscales <-  NDDx_summary_ef_ratingform[NDDx_summary_ef_ratingform$Domain_code %in% domain_subscales, ] # domains 7-11
+domain_factors <-c(12,13,14)
+NDDx_summary_ef_ratingform_factors <-  NDDx_summary_ef_ratingform[NDDx_summary_ef_ratingform$Domain_code %in% domain_factors, ] # domains 7-11
+
+
+NDDx_summary_attention <-NDDx_summary%>% filter(NDDx_summary$EF_Attention == "attention")
+# writexl::write_xlsx(NDDx_summary_ef,"NDDx_control_effectsizes_executivefunction_just_removed_outliers.xlsx",col_names=TRUE)
+writexl::write_xlsx(NDDx_summary_ef_level1_and_behaviour,"NDDx_control_effectsizes_executivefunction_global_effortfor_behavioural_finalforpublication.xlsx",col_names=TRUE)
+# writexl::write_xlsx(NDDx_summary_ef_level2,"NDDx_control_effectsizes_executivefunction_subscales_inratingform_just_removed_outliers.xlsx",col_names=TRUE)
+writexl::write_xlsx(NDDx_summary_attention,"NDDx_control_effectsizes_attention_finalforpublication.xlsx",col_names=TRUE)
+# writexl::write_xlsx(NDDx_summary_ef_only_behavioural,"NDDx_control_effectsizes_onlybehaviour_just_removed_outliers.xlsx",col_names=TRUE)
+# writexl::write_xlsx(NDDx_summary_ef_ratingform_level1,"NDDx_control_effectsizes_onlyrf_level1_just_removed_outliers.xlsx",col_names=TRUE)
+# writexl::write_xlsx(NDDx_summary_ef_level1_and_behaviour_attention_combined,"NDDx_control_effectsizes_attention_and_ef_level1_just_removed_outliers.xlsx",col_names=TRUE)
+# writexl::write_xlsx(NDDx_summary_ef_ratingform_subscales,"NDDx_control_effectsizes_ef_ratingform_subscales_just_removed_outliers.xlsx",col_names=TRUE)
+# writexl::write_xlsx(NDDx_summary_ef_ratingform_factors,"NDDx_control_effectsizes_ef_ratingform_factors_just_removed_outliers.xlsx",col_names=TRUE)
+
+# View(NDDx_summary_ef)
+# NDDx_summary_ef[, 1] <- as.numeric(as.character(NDDx_summary_ef[, 1]))
+# NDDx_summary_ef[, 6] <- as.numeric(as.character(NDDx_summary_ef[, 6]))
+NDDx_summary_ef_level1_and_behaviour[, 1] <- as.numeric(as.character(NDDx_summary_ef_level1_and_behaviour[, 1]))
+NDDx_summary_ef_level1_and_behaviour[, 6] <- as.numeric(as.character(NDDx_summary_ef_level1_and_behaviour[, 6]))
+NDDx_summary_ef_ratingform_level1[, 1] <- as.numeric(as.character(NDDx_summary_ef_ratingform_level1[, 1]))
+NDDx_summary_ef_ratingform_level1[, 6] <- as.numeric(as.character(NDDx_summary_ef_ratingform_level1[, 6]))
+NDDx_summary_ef_level2[, 1] <- as.numeric(as.character(NDDx_summary_ef_level2[, 1]))
+NDDx_summary_ef_level2[, 6] <- as.numeric(as.character(NDDx_summary_ef_level2[, 6]))
+# View(NDDx_summary_attention)
+NDDx_summary_attention[, 1] <- as.numeric(as.character(NDDx_summary_attention[, 1]))
+NDDx_summary_attention[, 6] <- as.numeric(as.character(NDDx_summary_attention[, 6]))
+NDDx_summary_ef_only_behavioural[, 1] <- as.numeric(as.character(NDDx_summary_ef_only_behavioural[, 1]))
+NDDx_summary_ef_only_behavioural[, 6] <- as.numeric(as.character(NDDx_summary_ef_only_behavioural[, 6]))
+NDDx_summary_ef_level1_and_behaviour_attention_combined[, 1] <- as.numeric(as.character(NDDx_summary_ef_level1_and_behaviour_attention_combined[, 1]))
+NDDx_summary_ef_level1_and_behaviour_attention_combined[, 6] <- as.numeric(as.character(NDDx_summary_ef_level1_and_behaviour_attention_combined[, 6]))
+NDDx_summary_ef_ratingform_subscales[, 1] <- as.numeric(as.character(NDDx_summary_ef_ratingform_subscales[, 1]))
+NDDx_summary_ef_ratingform_subscales[, 6] <- as.numeric(as.character(NDDx_summary_ef_ratingform_subscales[, 6]))
+NDDx_summary_ef_ratingform_factors[, 1] <- as.numeric(as.character(NDDx_summary_ef_ratingform_factors[, 1]))
+NDDx_summary_ef_ratingform_factors[, 6] <- as.numeric(as.character(NDDx_summary_ef_ratingform_factors[, 6]))
+
+```
+
+#---------------------
+# -- Original Data Analysis
+#---------------------
+## Step 2.0 Overall Estimates Per study in each attention/EF level 1 +behaviour
+
+```{r}
+# Assuming you have a dataframe named filtered_all_NDDx_control
+# with columns study_ID, ef_attention, yi, and vi
+
+# Get unique combinations of study_ID and ef_attention
+unique_combinations <- unique(NDDx_summary[, c("Study.No.", "EF_Attention")])
+
+# Initialize an empty list to store the results
+results <- c()
+# Loop through each combination
+for (i in 1:nrow(unique_combinations)) {
+  current_combination <- unique_combinations[i, ]
+  
+  # Filter the data for the current combination
+  current_data <- NDDx_summary %>%
+    filter(Study.No. == current_combination$`Study.No.`, EF_Attention == current_combination$`EF_Attention`)
+  
+  # Calculate the mean yi and vi for the current combination
+  mean_yi <- mean(current_data$yi)
+  mean_vi <- mean(current_data$vi)
+  mean_SE <- sqrt(mean_vi)
+  # Add the results to the list
+  results[[i]] <- list(
+    Study_No= current_combination$`Study.No.`,
+    EF_Attention = current_combination$`EF_Attention`,
+    mean_yi = mean_yi,
+    mean_vi = mean_vi,
+    mean_se = mean_SE
+  )
+}
+
+# Convert the list of results to a dataframe
+estimates_perstudy <- as.data.frame(do.call(rbind, results))
+View(estimates_perstudy)
+
+# Print the overall yi and vi values along with study_ID and ef_attention
+# library(xlsx)
+writexl::write_xlsx(estimates_perstudy,"overall_yi_vi_forpublication_original.xlsx")
+
+```
+
+## Step 2.1: overall random effect (EF level 1 and behaviour)
+
+```{r}
+# Multi-variant random effect (across studies) executive 
+current<-list()
+random_effect_study_ef_level1 <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, data=NDDx_summary_ef_level1_and_behaviour,slab=paste(NDDx_summary_ef_level1_and_behaviour$Study.No.,sep=""))
+summary(random_effect_study_ef_level1, digits=3)
+predict(random_effect_study_ef_level1)
+pooled_effect <- random_effect_study_ef_level1$b
+pooled_effect_ci_lb <- random_effect_study_ef_level1$ci.lb
+pooled_effect_ci_ub <- random_effect_study_ef_level1$ci.ub
+  
+pooled_effect_nlevel <-random_effect_study_ef_level1$s.nlevels # number of studies
+pooled_effect_k <-random_effect_study_ef_level1$k.eff # number of outcomes
+pooled_effect_tau2 <-case_when(
+                                  TRUE ~sprintf("%.3f",random_effect_study_ef_level1$sigma2)
+                      )
+pooled_I2 <- mapply(I_squared,random_effect_study_ef_level1$tau2, random_effect_study_ef_level1$sigma2)
+pooled_pval <-mapply(p_value,random_effect_study_ef_level1$pval)
+pooled_qe <-random_effect_study_ef_level1$QE
+pooled_qedf <-random_effect_study_ef_level1$QEdf
+pooled_qe_p <-mapply(p_value,random_effect_study_ef_level1$QEp)
+pooled_qm <-random_effect_study_ef_level1$QM
+pooled_qmdf <-random_effect_study_ef_level1$QMdf[1]
+pooled_qm_p <-mapply(p_value,random_effect_study_ef_level1$QMp)
+
+  # Create a data frame of pooled effects
+current <- data.frame(
+  Pooled_Effect = unlist(pooled_effect),
+  Pooled_cilb = unlist(pooled_effect_ci_lb),
+  Pooled_ciub  = unlist(pooled_effect_ci_ub),
+  Pooled_nlevel = unlist(pooled_effect_nlevel),
+  Pooled_I2= unlist(pooled_I2),
+  Pooled_pval= unlist(pooled_pval),
+  Pooled_k= unlist(pooled_effect_k),
+  Pooled_tau2= unlist(pooled_effect_tau2),
+  # Pooled_sigma2= unlist(pooled_effect_sigma2),
+  
+  Pooled_QE= unlist(pooled_qe),
+  Pooled_QEdf= unlist(pooled_qedf),
+  Pooled_QE_p= unlist(pooled_qe_p),
+  Pooled_QM= unlist(pooled_qm),
+  Pooled_QMdf= unlist(pooled_qmdf),
+  Pooled_QM_p= unlist(pooled_qm_p)
+
+)
+# forest(random_effect_study_ef_level1)
+
+writexl::write_xlsx(current,"pooled_overall_ef_level1_behaviour_original.xlsx",col_names=TRUE)
+```
+### Step 2.1.1: Funnel plot and trim-and-fill analysis (EF level 1 and behaviour)
+```{r}
+NDDx_summary_ef_level1_and_behaviour$SE<-sqrt(NDDx_summary_ef_level1_and_behaviour$vi)
+Data_meta_means_NDDx_summary_ef_level1_and_behaviour <-
+  NDDx_summary_ef_level1_and_behaviour %>% select(`Study.No.`, `Domain`, yi, SE, vi) %>%
+  group_by(`Study.No.`,) %>%
+  summarise(mean_g=mean(yi),mean_SE=mean(SE), mean_Vi=mean(vi))
+
+eggers_EF <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`,mods = SE, data=NDDx_summary_ef_level1_and_behaviour,slab=paste(NDDx_summary_ef_level1_and_behaviour$`Study.No.`,sep=""))
+## Uni-variant 
+random_effect_study_ef_level1_and_behaviour_univariant <- rma(yi = mean_g, sei = mean_SE, data =Data_meta_means_NDDx_summary_ef_level1_and_behaviour) 
+print(random_effect_study_ef_level1_and_behaviour_univariant,digits=3)
+predict(random_effect_study_ef_level1_and_behaviour_univariant)
+funnel(random_effect_study_ef_level1_and_behaviour_univariant)
+
+taf_ef_level1 <- trimfill(random_effect_study_ef_level1_and_behaviour_univariant, side = "left")
+funnel_figure4b<-recordPlot({
+  funnel(taf_ef_level1,legend=TRUE,main="Executive Function\n(before removal of outliers)", cex.main = 0.7, cex.lab = 0.7, cex.axis = 0.7)
+})
+```
+
+## Step 2.2: overall random effect (Attention)
+
+```{r}
+#Multi-variant random effect (across studies) attention
+current<-list()
+NDDx_summary_attention <- NDDx_summary_attention[order(NDDx_summary_attention$yi), ]
+
+random_effect_study_attention <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, data=NDDx_summary_attention,slab=paste(NDDx_summary_attention$Study.No.,sep=""))
+summary(random_effect_study_attention, digits=3)
+predict(random_effect_study_attention)
+pooled_effect <- random_effect_study_attention$b
+pooled_effect_ci_lb <- random_effect_study_attention$ci.lb
+pooled_effect_ci_ub <- random_effect_study_attention$ci.ub
+  
+pooled_effect_nlevel <-random_effect_study_attention$s.nlevels # number of studies
+pooled_effect_k <-random_effect_study_attention$k.eff # number of outcomes
+pooled_effect_tau2 <-case_when(
+                                  TRUE ~sprintf("%.3f",random_effect_study_attention$sigma2)
+                      )
+pooled_I2 <- mapply(I_squared,random_effect_study_attention$tau2, random_effect_study_attention$sigma2)
+pooled_pval <-mapply(p_value,random_effect_study_attention$pval)
+pooled_qe <-random_effect_study_attention$QE
+pooled_qedf <-random_effect_study_attention$QEdf
+pooled_qe_p <-mapply(p_value,random_effect_study_attention$QEp)
+pooled_qm <-random_effect_study_attention$QM
+pooled_qmdf <-random_effect_study_attention$QMdf[1]
+pooled_qm_p <-mapply(p_value,random_effect_study_attention$QMp)
+
+  # Create a data frame of pooled effects
+current <- data.frame(
+  Pooled_Effect = unlist(pooled_effect),
+  Pooled_cilb = unlist(pooled_effect_ci_lb),
+  Pooled_ciub  = unlist(pooled_effect_ci_ub),
+  Pooled_nlevel = unlist(pooled_effect_nlevel),
+  Pooled_I2= unlist(pooled_I2),
+  Pooled_pval= unlist(pooled_pval),
+  Pooled_k= unlist(pooled_effect_k),
+  Pooled_tau2= unlist(pooled_effect_tau2),
+  
+  Pooled_QE= unlist(pooled_qe),
+  Pooled_QEdf= unlist(pooled_qedf),
+  Pooled_QE_p= unlist(pooled_qe_p),
+  Pooled_QM= unlist(pooled_qm),
+  Pooled_QMdf= unlist(pooled_qmdf),
+  Pooled_QM_p= unlist(pooled_qm_p)
+
+)
+meta::forest(random_effect_study_attention)
+writexl::write_xlsx(current,"pooled_overall_attention_original.xlsx",col_names=TRUE)
+```
+
+### Step 2.2.1: Funnel plot and trim-and-fill analysis (Attention)
+```{r}
+NDDx_summary_attention$SE<-sqrt(NDDx_summary_attention$vi)
+Data_meta_means_NDDx_summary_attention <-
+  NDDx_summary_attention %>% select(`Study.No.`, `Domain`, yi, SE, vi) %>%
+  group_by(`Study.No.`,) %>%
+  summarise(mean_g=mean(yi),mean_SE=mean(SE), mean_Vi=mean(vi))
+
+eggers_attention <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`,mods = SE, data=NDDx_summary_attention,slab=paste(NDDx_summary_attention$`Study.No.`,sep=""))
+## Uni-variant 
+random_effect_study_attention_univariant <- rma(yi = mean_g, sei = mean_SE, data =Data_meta_means_NDDx_summary_attention) 
+print(random_effect_study_attention_univariant,digits=3)
+predict(random_effect_study_attention_univariant)
+funnel(random_effect_study_attention_univariant)
+```
+# Additional Bayesian Model
+```{r}
+# library(RoBMA)
+# robustbayesian_ef_level1<-RoBMA(d= NDDx_summary_ef_level1_and_behaviour$yi, v=NDDx_summary_ef_level1_and_behaviour$vi, study_ids =NDDx_summary_ef_level1_and_behaviour$`Study.No.`,priors_bias = NULL,parallel = TRUE, seed = 1)
+# summary(robustbayesian_ef_level1)
+# 
+# robustbayesian_attention<-RoBMA(d= NDDx_summary_attention$yi, v=NDDx_summary_attention$vi, study_ids =NDDx_summary_attention$`Study.No.`,priors_bias = NULL,parallel = TRUE, seed = 1)
+# summary(robustbayesian_attention)
+```
+#------------------------------
+# - After removing outliers
+#------------------------------
+
+# Removing studys that has g>2
+```{r}
+# remove study no with g>2
+## EF
+ef_toremove <- c(237, 110,264,106)
+attention_toremove <- c(157, 120,189)
+
+NDDx_summary_ef_level1_and_behaviour<-NDDx_summary_ef_level1_and_behaviour[!(NDDx_summary_ef_level1_and_behaviour$Study.No.%in% ef_toremove),]
+Data_meta_means_NDDx_summary_ef_level1_and_behaviour<-Data_meta_means_NDDx_summary_ef_level1_and_behaviour[!(Data_meta_means_NDDx_summary_ef_level1_and_behaviour$Study.No.%in% ef_toremove),]
+
+## Attention
+NDDx_summary_attention<-NDDx_summary_attention[!(NDDx_summary_attention$Study.No. %in% attention_toremove),]
+Data_meta_means_NDDx_summary_attention<-Data_meta_means_NDDx_summary_attention[!(Data_meta_means_NDDx_summary_attention$Study.No.%in% attention_toremove),]
+
+
+## Funnel plot after removing mean_g>2
+### Step 1: EF level 1
+eggers_EF_outlierremoved <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`,mods = SE, data=NDDx_summary_ef_level1_and_behaviour,slab=paste(NDDx_summary_ef_level1_and_behaviour$`Study.No.`,sep=""))
+#### Uni-variant 
+random_effect_study_ef_level1_and_behaviour_univariant <- rma(yi = mean_g, sei = mean_SE, data =Data_meta_means_NDDx_summary_ef_level1_and_behaviour) 
+print(random_effect_study_ef_level1_and_behaviour_univariant,digits=3)
+predict(random_effect_study_ef_level1_and_behaviour_univariant)
+funnel(random_effect_study_ef_level1_and_behaviour_univariant)
+
+taf_ef_level1_outlierremoved <- trimfill(random_effect_study_ef_level1_and_behaviour_univariant, side = "left")
+
+
+### Step 2: Attention
+eggers_attention_outlierremoved <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`,mods = SE, data=NDDx_summary_attention,slab=paste(NDDx_summary_attention$`Study.No.`,sep=""))
+## Uni-variant 
+random_effect_study_attention_univariant <- rma(yi = mean_g, sei = mean_SE, data =Data_meta_means_NDDx_summary_attention) 
+print(random_effect_study_attention_univariant,digits=3)
+predict(random_effect_study_attention_univariant)
+funnel(random_effect_study_attention_univariant)
+
+
+taf_attention_outlierremoved<- trimfill(random_effect_study_attention_univariant, side = "left")
+```
+## Plotting Funnel plots (Figure 4)
+```{r}
+# Convert dimensions from millimeters to inches
+width_mm <- 180  # width in millimeters
+height_mm <- 200 # height in millimeters
+
+width_in <- width_mm / 25.4  # Convert to inches
+height_in <- height_mm / 25.4 # Convert to inches
+
+svg("funnel_plots_Figure4.svg", width = width_in, height = height_in, pointsize = 7)
+
+par(mfrow = c(2, 2),              
+    mar = c(5, 4, 4, 2) + 0.1,    
+    oma = c(3, 1, 3, 1),           
+    family = "Helvetica",
+    fontsize=0.7, cex = 0.7, cex.lab = 0.7, cex.axis = 0.7, cex.main = 0.7)
+
+funnel(taf_attention,legend=TRUE,main="Attention\n(before removal of outliers)", cex.main = 0.7, cex.lab = 0.7, cex.axis = 0.7)
+mtext("(A)", side = 1, line = 5, at = mean(par("usr")[1:2]),cex = 0.7)
+funnel(taf_ef_level1,legend=TRUE,main="Executive Function\n(before removal of outliers)", cex.main = 0.7, cex.lab = 0.7, cex.axis = 0.7)
+mtext("(B)", side = 1, line = 5, at = mean(par("usr")[1:2]), cex = 0.7)
+funnel(taf_attention_outlierremoved,legend=TRUE,main="Attention\n(after removal of outliers)", cex.main = 0.7, cex.lab = 0.7, cex.axis = 0.7)
+mtext("(C)", side = 1, line = 5, at = mean(par("usr")[1:2]),cex = 0.7)
+funnel(taf_ef_level1_outlierremoved,legend=TRUE,main="Executive Function\n(after removal of outliers)", cex.main = 0.7, cex.lab = 0.7, cex.axis = 0.7)
+mtext("(D)", side = 1, line = 5, at = mean(par("usr")[1:2]), cex = 0.7)
+
+```
+
+## Step 2.1: overall random effect (EF level 1 and behaviour)
+
+```{r}
+# Multi-variant random effect (across studies) executive 
+current<-list()
+NDDx_summary_ef_level1_and_behaviour <- NDDx_summary_ef_level1_and_behaviour[order(NDDx_summary_ef_level1_and_behaviour$yi), ]
+
+random_effect_study_ef_level1 <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, data=NDDx_summary_ef_level1_and_behaviour,slab=paste(NDDx_summary_ef_level1_and_behaviour$Study.No.,sep=""))
+summary(random_effect_study_ef_level1, digits=3)
+predict(random_effect_study_ef_level1)
+pooled_effect <- random_effect_study_ef_level1$b
+pooled_effect_ci_lb <- random_effect_study_ef_level1$ci.lb
+pooled_effect_ci_ub <- random_effect_study_ef_level1$ci.ub
+  
+pooled_effect_nlevel <-random_effect_study_ef_level1$s.nlevels # number of studies
+pooled_effect_k <-random_effect_study_ef_level1$k.eff # number of outcomes
+pooled_effect_tau2 <-case_when(
+                                  TRUE ~sprintf("%.3f",random_effect_study_ef_level1$sigma2)
+                      )
+pooled_I2 <- mapply(I_squared,random_effect_study_ef_level1$tau2, random_effect_study_ef_level1$sigma2)
+pooled_pval <-mapply(p_value,random_effect_study_ef_level1$pval)
+pooled_qe <-random_effect_study_ef_level1$QE
+pooled_qedf <-random_effect_study_ef_level1$QEdf
+pooled_qe_p <-mapply(p_value,random_effect_study_ef_level1$QEp)
+pooled_qm <-random_effect_study_ef_level1$QM
+pooled_qmdf <-random_effect_study_ef_level1$QMdf[1]
+pooled_qm_p <-mapply(p_value,random_effect_study_ef_level1$QMp)
+
+  # Create a data frame of pooled effects
+current <- data.frame(
+  Pooled_Effect = unlist(pooled_effect),
+  Pooled_cilb = unlist(pooled_effect_ci_lb),
+  Pooled_ciub  = unlist(pooled_effect_ci_ub),
+  Pooled_nlevel = unlist(pooled_effect_nlevel),
+  Pooled_I2= unlist(pooled_I2),
+  Pooled_pval= unlist(pooled_pval),
+  Pooled_k= unlist(pooled_effect_k),
+  Pooled_tau2= unlist(pooled_effect_tau2),
+  Pooled_QE= unlist(pooled_qe),
+  Pooled_QEdf= unlist(pooled_qedf),
+  Pooled_QE_p= unlist(pooled_qe_p),
+  Pooled_QM= unlist(pooled_qm),
+  Pooled_QMdf= unlist(pooled_qmdf),
+  Pooled_QM_p= unlist(pooled_qm_p)
+
+)
+forest(random_effect_study_ef_level1, cex = 0.8,width=10)
+writexl::write_xlsx(current,"pooled_overall_ef_level1_behaviour_just_removed_outliers.xlsx",col_names=TRUE)
+```
+## Step 2.2: overall random effect (Attention)
+
+```{r}
+#Multi-variant random effect (across studies) attention
+current<-list()
+NDDx_summary_attention <- NDDx_summary_attention[order(NDDx_summary_attention$yi), ]
+
+random_effect_study_attention <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, data=NDDx_summary_attention,slab=paste(NDDx_summary_attention$Study.No.,sep=""))
+summary(random_effect_study_attention, digits=3)
+predict(random_effect_study_attention)
+pooled_effect <- random_effect_study_attention$b
+pooled_effect_ci_lb <- random_effect_study_attention$ci.lb
+pooled_effect_ci_ub <- random_effect_study_attention$ci.ub
+  
+pooled_effect_nlevel <-random_effect_study_attention$s.nlevels # number of studies
+pooled_effect_k <-random_effect_study_attention$k.eff # number of outcomes
+pooled_effect_tau2 <-case_when(
+                                  TRUE ~sprintf("%.3f",random_effect_study_attention$sigma2)
+                      )
+pooled_I2 <- mapply(I_squared,random_effect_study_attention$tau2, random_effect_study_attention$sigma2)
+pooled_pval <-mapply(p_value,random_effect_study_attention$pval)
+pooled_qe <-random_effect_study_attention$QE
+pooled_qedf <-random_effect_study_attention$QEdf
+pooled_qe_p <-mapply(p_value,random_effect_study_attention$QEp)
+pooled_qm <-random_effect_study_attention$QM
+pooled_qmdf <-random_effect_study_attention$QMdf[1]
+pooled_qm_p <-mapply(p_value,random_effect_study_attention$QMp)
+
+  # Create a data frame of pooled effects
+current <- data.frame(
+  Pooled_Effect = unlist(pooled_effect),
+  Pooled_cilb = unlist(pooled_effect_ci_lb),
+  Pooled_ciub  = unlist(pooled_effect_ci_ub),
+  Pooled_nlevel = unlist(pooled_effect_nlevel),
+  Pooled_I2= unlist(pooled_I2),
+  Pooled_pval= unlist(pooled_pval),
+  Pooled_k= unlist(pooled_effect_k),
+  Pooled_tau2= unlist(pooled_effect_tau2),
+  
+  Pooled_QE= unlist(pooled_qe),
+  Pooled_QEdf= unlist(pooled_qedf),
+  Pooled_QE_p= unlist(pooled_qe_p),
+  Pooled_QM= unlist(pooled_qm),
+  Pooled_QMdf= unlist(pooled_qmdf),
+  Pooled_QM_p= unlist(pooled_qm_p)
+
+)
+forest(random_effect_study_attention, cex = 0.8,width=10)
+
+writexl::write_xlsx(current,"pooled_overall_attention_just_removed_outliers.xlsx",col_names=TRUE)
+```
+
+# Additional Hirerarchical Bayesian Model-Averaged Meta-Analysis
+
+```{r}
+# library(RoBMA)
+robustbayesian_ef_level1<-RoBMA(d= NDDx_summary_ef_level1_and_behaviour$yi, v=NDDx_summary_ef_level1_and_behaviour$vi, study_ids =NDDx_summary_ef_level1_and_behaviour$`Study.No.`,priors_bias = NULL,parallel = TRUE, seed = 1)
+summary(robustbayesian_ef_level1)
+interpret(robustbayesian_ef_level1, output_scale = NULL)
+
+robustbayesian_attention<-RoBMA(d= NDDx_summary_attention$yi, v=NDDx_summary_attention$vi, study_ids =NDDx_summary_attention$`Study.No.`,priors_bias = NULL,parallel = TRUE, seed = 1)
+summary(robustbayesian_attention)
+interpret(robustbayesian_attention, output_scale = NULL)
+```
+
+
+
+# Attention multi-variate effect
+
+## Overall Attention Effect per type of measure
+
+```{r}
+skipped_attentionmeasure_lessstudyonly <-c()
+attention_typeofmeasures<-c()
+attention_tom_pooled_ef <- list()
+attention_tom_pooled_ci_lb <- list()
+attention_tom_pooled_ci_ub <- list()
+attention_tom_pooled_p<- list()
+attention_tom_pooled_k<-list()
+attention_tom_pooled_nlevel<- list()
+for (tom_label in unique(NDDx_summary_attention$Type.of.measure..i.e...biological..behavioural..rating.form.)){
+  each_type_of_measure_dataset <- c()
+  each_type_of_measure_dataset <-NDDx_summary_attention %>% filter(NDDx_summary_attention$Type.of.measure..i.e...biological..behavioural..rating.form.== tom_label )
+  # print(tom_label)
+ if(length(unique(each_type_of_measure_dataset$Study.No.)) <=2){
+    skipped_attentionmeasure_lessstudyonly<-c(skipped_attentionmeasure_lessstudyonly, tom_label)
+    next
+  }
+  #print(each_type_of_measure_dataset)
+  attention_typeofmeasures[[tom_label]] <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, data=each_type_of_measure_dataset, slab=paste(each_type_of_measure_dataset$Study_year,sep=""))
+
+  #print(attention_typeofmeasures[[tom_label]], digits=3)
+  forest_plot_attention_typeofmeasure<-metafor::forest(attention_typeofmeasures[[tom_label]],addpred=TRUE,header=TRUE)
+  # print(forest_plot_attention_typeofmeasure, digits = 3)
+  text(x = 0, y = nrow(each_type_of_measure_dataset) + 1, labels = tom_label, pos = 3)
+  
+  # Extract pooled effect size from each domain_label
+  attention_tom_pooled_ef[[tom_label]] <- attention_typeofmeasures[[tom_label]]$b
+  attention_tom_pooled_ci_lb[[tom_label]] <- attention_typeofmeasures[[tom_label]]$ci.lb
+  attention_tom_pooled_ci_ub[[tom_label]] <- attention_typeofmeasures[[tom_label]]$ci.ub
+  attention_tom_pooled_p[[tom_label]] <- attention_typeofmeasures[[tom_label]]$pval
+  attention_tom_pooled_k[[tom_label]] <- attention_typeofmeasures[[tom_label]]$k
+  attention_tom_pooled_nlevel[[tom_label]] <- attention_typeofmeasures[[tom_label]]$s.nlevels
+
+  
+}
+
+# Create a data frame of pooled effects
+pooled_effects_tom_attention_dataframe <- data.frame(
+  TOM = names(attention_tom_pooled_ef),
+  Pooled_Effect = unlist(attention_tom_pooled_ef),
+  Pooled_cilb = unlist(attention_tom_pooled_ci_lb),
+  Pooled_ciub  = unlist(attention_tom_pooled_ci_ub),
+  Pooled__p  = unlist(attention_tom_pooled_p),
+  Pooled_k  = unlist(attention_tom_pooled_k),
+  Pooled_nlevel  = unlist(attention_tom_pooled_nlevel)
+
+)
+# Create a single forest plot to display the pooled effects of sub-domains
+overall_forest_plot_tom_attention <- metafor::forest(pooled_effects_tom_attention_dataframe$Pooled_Effect, 
+                                       ci.lb = pooled_effects_tom_attention_dataframe$Pooled_cilb, 
+                                       ci.ub = pooled_effects_tom_attention_dataframe$Pooled_ciub,
+                                       slab = paste(pooled_effects_tom_attention_dataframe$TOM),
+                                       xlim = c(-5, 5),  # Adjust as needed
+                                       addsummary = TRUE,
+                                       addpred=TRUE, 
+                                       header = "Type of Measures",
+                                       xlab = "Hedges' g",
+
+                                       digits = 3)
+
+
+cat("less than three studies, not suitable for meta-analysis:", paste(skipped_attentionmeasure_lessstudyonly, collapse = ", "),"\n")
+skipped_datasets_attention <- NDDx_summary_attention[NDDx_summary_attention$Type.of.measure..i.e...biological..behavioural..rating.form. %in% skipped_attentionmeasure_lessstudyonly, ]
+# View(skipped_datasets_attention)
+# writexl::write_xlsx(skipped_datasets_attention,"NDDx_control_effectsizes_Attention_skippedstudies_just_removed_outliers.xlsx",col_names=TRUE)
+# writexl::write_xlsx(pooled_effects_tom_attention_dataframe,"pooled_effects_tom_attention_dataframe_just_removed_outliers.xlsx",col_names=TRUE)
+```
+
+# Overall EF Effect per Domain
+
+## Step 1 Level 1 and behaviour EF per domain
+
+```{r}
+
+skipped_level1_domains_lessstudyonly <-c()
+
+EF_perdomain_level1<-c()
+
+EF_perdomain_level1_no_rf_pooled_ef <- list()
+
+EF_perdomain_level1_no_rf_pooled_ci_lb <- list()
+
+EF_perdomain_level1_no_rf_pooled_ci_ub <- list()
+EF_perdomain_level1_no_rf_nlevel<- list()
+EF_perdomain_level1_no_rf_I_sqr<- list()
+EF_perdomain_level1_no_rf_p<- list()
+EF_perdomain_level1_no_rf_k<- list()
+EF_perdomain_level1_no_rf_tau2<- list()
+EF_perdomain_level1_no_rf_qe<- list()
+EF_perdomain_level1_no_rf_qe_df<- list()
+EF_perdomain_level1_rf_qe_p<- list()
+EF_perdomain_level1_rf_qm<- list()
+EF_perdomain_level1_rf_qm_df<- list()
+EF_perdomain_level1_rf_qm_p<- list()
+EF_perdomain_level1_rf_sigma2<- list()
+for (domain_label in unique(NDDx_summary_ef_level1_and_behaviour$`Domain`)){
+
+  each_level1_ef_domain_dataset <- c()
+
+  each_level1_ef_domain_dataset <-NDDx_summary_ef_level1_and_behaviour%>% filter(NDDx_summary_ef_level1_and_behaviour$`Domain`== domain_label)
+
+  # print(domain_label)
+
+  if(length(unique(each_level1_ef_domain_dataset$Study.No.)) <=2){
+
+    skipped_level1_domains_lessstudyonly<-c(skipped_level1_domains_lessstudyonly, domain_label)
+
+    next
+
+  }
+  each_level1_ef_domain_dataset <- each_level1_ef_domain_dataset[order(each_level1_ef_domain_dataset$yi), ]
+
+  EF_perdomain_level1[[domain_label]] <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, data=each_level1_ef_domain_dataset, slab=paste(each_level1_ef_domain_dataset$Study_year,sep=""))
+
+  print(EF_perdomain_level1[[domain_label]], digits=3)
+
+  forest_plot_efdomain_level1<-metafor::forest(EF_perdomain_level1[[domain_label]],addpred=TRUE,header=TRUE)
+
+  text(x = 0, y = nrow(each_level1_ef_domain_dataset) + 1, labels = domain_label, pos = 3)
+
+  print(forest_plot_efdomain_level1, digits = 3)
+
+  # Extract pooled effect size from each domain_label
+
+  pooled_effect <- EF_perdomain_level1[[domain_label]]$b
+
+  pooled_effect_ci_lb <- EF_perdomain_level1[[domain_label]]$ci.lb
+
+  pooled_effect_ci_ub <- EF_perdomain_level1[[domain_label]]$ci.ub
+
+  EF_perdomain_level1_no_rf_pooled_ef[[domain_label]]<-pooled_effect
+
+  EF_perdomain_level1_no_rf_pooled_ci_lb[[domain_label]]<-pooled_effect_ci_lb
+
+  EF_perdomain_level1_no_rf_pooled_ci_ub[[domain_label]]<-pooled_effect_ci_ub
+
+  pooled_effect_nlevel <-EF_perdomain_level1[[domain_label]]$s.nlevels # number of studies
+  pooled_effect_k <-EF_perdomain_level1[[domain_label]]$k.eff # number of outcomes
+  pooled_effect_tau2 <-EF_perdomain_level1[[domain_label]]$tau2
+  pooled_effect_sigma2 <-EF_perdomain_level1[[domain_label]]$sigma2
+  pooled_I2 <- mapply(I_squared,EF_perdomain_level1[[domain_label]]$tau2, EF_perdomain_level1[[domain_label]]$sigma2)
+  pooled_pval <-mapply(p_value,EF_perdomain_level1[[domain_label]]$pval)
+  pooled_qe <-EF_perdomain_level1[[domain_label]]$QE
+  pooled_qedf <-EF_perdomain_level1[[domain_label]]$QEdf
+  pooled_qe_p <-mapply(p_value,EF_perdomain_level1[[domain_label]]$QEp)
+  pooled_qm <-EF_perdomain_level1[[domain_label]]$QM
+  pooled_qmdf <-EF_perdomain_level1[[domain_label]]$QMdf
+  pooled_qm_p <-mapply(p_value,EF_perdomain_level1[[domain_label]]$QMp)
+  
+  EF_perdomain_level1_no_rf_pooled_ef[[domain_label]]<-pooled_effect
+  EF_perdomain_level1_no_rf_pooled_ci_lb[[domain_label]]<-pooled_effect_ci_lb
+  EF_perdomain_level1_no_rf_pooled_ci_ub[[domain_label]]<-pooled_effect_ci_ub
+  EF_perdomain_level1_no_rf_nlevel[[domain_label]]<-pooled_effect_nlevel
+  EF_perdomain_level1_no_rf_I_sqr[[domain_label]]<-pooled_I2
+  EF_perdomain_level1_no_rf_p[[domain_label]]<-pooled_pval
+  EF_perdomain_level1_no_rf_k[[domain_label]]<-pooled_effect_k
+  EF_perdomain_level1_no_rf_tau2[[domain_label]]<-pooled_effect_tau2
+  EF_perdomain_level1_no_rf_qe[[domain_label]]<-pooled_qe
+  EF_perdomain_level1_no_rf_qe_df[[domain_label]]<-pooled_qedf
+  EF_perdomain_level1_rf_qe_p[[domain_label]]<-pooled_qe_p
+  EF_perdomain_level1_rf_qm[[domain_label]]<-pooled_qm
+  EF_perdomain_level1_rf_qm_df[[domain_label]]<-pooled_qmdf
+  EF_perdomain_level1_rf_qm_p[[domain_label]]<-pooled_qm_p
+  EF_perdomain_level1_rf_sigma2[[domain_label]]<-case_when(
+    TRUE ~ sprintf("%.3f", pooled_effect_sigma2)
+  )
+}
+
+# Create a data frame of pooled effects
+
+pooled_effects_level1_perdomain_dataframe <- data.frame(
+
+  Domain = names(EF_perdomain_level1_no_rf_pooled_ef),
+
+  Pooled_Effect = unlist(EF_perdomain_level1_no_rf_pooled_ef),
+
+  Pooled_cilb = unlist(EF_perdomain_level1_no_rf_pooled_ci_lb),
+
+  Pooled_ciub  = unlist(EF_perdomain_level1_no_rf_pooled_ci_ub),
+  Pooled_n=unlist(EF_perdomain_level1_no_rf_nlevel),
+  Pooled_p=unlist(EF_perdomain_level1_no_rf_p),
+  Pooled_k=unlist(EF_perdomain_level1_no_rf_k),
+  Pooled_tau2=unlist(EF_perdomain_level1_rf_sigma2)
+  
+)
+
+# Create a single forest plot to display the pooled effects of sub-domains
+## reorder the table before forest plot
+custom_order <-c("Simple Working Memory","Complex Working Memory","Simple Response Inhibition","Complex Response Inhibition","Response Shifting","Attention Shifting","Higher-order EF")
+# Convert the 'Domain' column to a factor with the specific order
+pooled_effects_level1_perdomain_dataframe <- 
+  pooled_effects_level1_perdomain_dataframe[order(factor(pooled_effects_level1_perdomain_dataframe$Domain, levels = custom_order)),]
+
+cat("less than three studies, not suitable for meta-analysis:", paste(skipped_level1_domains_lessstudyonly, collapse = ", "),"\n")
+
+skipped_datasets_level1_perdomain <- NDDx_summary_ef_level1_and_behaviour[NDDx_summary_ef_level1_and_behaviour$Domain %in% skipped_level1_domains_lessstudyonly, ]
+
+# View(skipped_datasets)
+
+writexl::write_xlsx(skipped_datasets_level1_perdomain,"NDDx_control_effectsizes_EF_level1_per_domain_skippedstudies_just_removed_outliers.xlsx",col_names=TRUE)
+writexl::write_xlsx(pooled_effects_level1_perdomain_dataframe,"pooled_effects_level1_perdomain_dataframe_just_removed_outliers.xlsx",col_names=TRUE)
+
+```
+
+## Step 2 Only Behavioural EF (No.)
+
+```{r}
+skipped_domains_norf_lessstudyonly <-c()
+EF_domains<-c()
+EF_domains_no_rf_pooled_ef <- list()
+EF_domains_no_rf_pooled_ci_lb <- list()
+EF_domains_no_rf_pooled_ci_ub <- list()
+EF_domains_no_rf_nlevel <- list()
+EF_domains_no_rf_I_sqr <- list()
+EF_domains_no_rf_p <- list()
+EF_domains_no_rf_k <- list()
+EF_domains_no_rf_tau2 <- list()
+EF_domains_no_rf_sigma2 <- list()
+EF_domains_no_rf_qm <- list()
+EF_domains_no_rf_qm_df <- list()
+EF_domains_no_rf_qm_p <- list()
+EF_domains_no_rf_qe <- list()
+EF_domains_no_rf_qe_df <- list()
+EF_domains_no_rf_qe_p <- list()
+
+temp <-list()
+flag = 1
+for (domain_label in unique(NDDx_summary_ef_only_behavioural$`Domain_code`)){
+  each_ef_domain_dataset <- c()
+  each_ef_domain_dataset <-NDDx_summary_ef_only_behavioural%>% filter(NDDx_summary_ef_only_behavioural$`Domain_code`== domain_label)
+  print(domain_label)
+  if(length(unique(each_ef_domain_dataset$Study.No.)) <=2){
+    skipped_domains_norf_lessstudyonly<-c(skipped_domains_norf_lessstudyonly, domain_label)
+    next
+  }
+  #print(each_ef_domain_dataset)
+  EF_domains[[flag]] <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, data=each_ef_domain_dataset, slab=paste(each_ef_domain_dataset$Study_year,sep=""))
+  
+  print(EF_domains[[flag]], digits = 3)
+
+  
+  forest_plot_efdomain<-metafor::forest(EF_domains[[flag]],addpred=TRUE,header=TRUE)
+  text(x = 0, y = nrow(each_ef_domain_dataset) + 1, labels = domain_label, pos = 3) 
+  # print(forest_plot_efdomain, digits = 3)
+  
+  # Extract pooled effect size from each domain_label
+  pooled_effect <- EF_domains[[flag]]$b
+  pooled_effect_ci_lb <- EF_domains[[flag]]$ci.lb
+  pooled_effect_ci_ub <- EF_domains[[flag]]$ci.ub
+  
+  pooled_effect_nlevel <-EF_domains[[flag]]$s.nlevels # number of studies
+  pooled_effect_k <-EF_domains[[flag]]$k.eff # number of outcomes
+  pooled_effect_tau2 <-EF_domains[[flag]]$tau2
+  pooled_effect_sigma2 <-EF_domains[[flag]]$sigma2
+  pooled_I2 <- mapply(I_squared,EF_domains[[flag]]$tau2, EF_domains[[flag]]$sigma2)
+  pooled_pval <-mapply(p_value,EF_domains[[flag]]$pval)
+  pooled_qe <-EF_domains[[flag]]$QE
+  pooled_qedf <-EF_domains[[flag]]$QEdf
+  pooled_qe_p <-mapply(p_value,EF_domains[[flag]]$QEp)
+  pooled_qm <-EF_domains[[flag]]$QM
+  pooled_qmdf <-EF_domains[[flag]]$QMdf
+  pooled_qm_p <-mapply(p_value,EF_domains[[flag]]$QMp)
+  
+  EF_domains_no_rf_pooled_ef[[flag]]<-pooled_effect
+  EF_domains_no_rf_pooled_ci_lb[[flag]]<-pooled_effect_ci_lb
+  EF_domains_no_rf_pooled_ci_ub[[flag]]<-pooled_effect_ci_ub
+  EF_domains_no_rf_nlevel[[flag]]<-pooled_effect_nlevel
+  EF_domains_no_rf_I_sqr[[flag]]<-pooled_I2
+  EF_domains_no_rf_p[[flag]]<-pooled_pval
+  EF_domains_no_rf_k[[flag]]<-pooled_effect_k
+  EF_domains_no_rf_tau2[[flag]]<-pooled_effect_tau2
+  EF_domains_no_rf_qe[[flag]]<-pooled_qe
+  EF_domains_no_rf_qe_df[[flag]]<-pooled_qedf
+  EF_domains_no_rf_qe_p[[flag]]<-pooled_qe_p
+  EF_domains_no_rf_qm[[flag]]<-pooled_qm
+  EF_domains_no_rf_qm_df[[flag]]<-pooled_qmdf
+  EF_domains_no_rf_qm_p[[flag]]<-pooled_qm_p
+  EF_domains_no_rf_sigma2[[flag]]<-case_when(
+    TRUE ~ sprintf("%.3f", pooled_effect_sigma2)
+  )
+  
+  # Create a data frame of pooled effects
+  current <- data.frame(
+  Domain = domain_string(domain_label),
+  Pooled_Effect = unlist(EF_domains_no_rf_pooled_ef[[flag]][1]),
+  Pooled_cilb = unlist(EF_domains_no_rf_pooled_ci_lb[[flag]][1]),
+  Pooled_ciub  = unlist(EF_domains_no_rf_pooled_ci_ub[[flag]][1]),
+  Pooled_nlevel = unlist(EF_domains_no_rf_nlevel[[flag]][1]),
+  Pooled_I2= unlist(EF_domains_no_rf_I_sqr[[flag]][1]),
+  Pooled_pval= unlist(EF_domains_no_rf_p[[flag]][1]),
+  Pooled_k= unlist(EF_domains_no_rf_k[[flag]][1]),
+  Pooled_tau2= unlist(EF_domains_no_rf_tau2[[flag]][1]),
+  Pooled_sigma2= unlist(EF_domains_no_rf_sigma2[[flag]][1]),
+  
+  Pooled_QE= unlist(EF_domains_no_rf_qe[[flag]][1]),
+  Pooled_QEdf= unlist(EF_domains_no_rf_qe_df[[flag]][1]),
+  Pooled_QE_p= unlist(EF_domains_no_rf_qe_p[[flag]][1]),
+  Pooled_QM= unlist(EF_domains_no_rf_qm[[flag]][1]),
+  Pooled_QMdf= unlist(EF_domains_no_rf_qm_df[[flag]][1]),
+  Pooled_QM_p= unlist(EF_domains_no_rf_qm_p[[flag]][1])
+
+)
+  temp[[flag]]<-current
+
+  flag = flag +1
+}
+
+pooled_effects_efdomains_behaviour_biological_dataframe<-do.call(rbind,temp)
+## reorder the table before forest plot
+custom_order <-c("Simple Working Memory","Complex Working Memory","Simple Response Inhibition","Complex Response Inhibition","Response Shifting","Attention Shifting","Higher-order EF")
+# Convert the 'Domain' column to a factor with the specific order
+pooled_effects_efdomains_behaviour_biological_dataframe <- 
+  pooled_effects_efdomains_behaviour_biological_dataframe[order(factor(pooled_effects_efdomains_behaviour_biological_dataframe$Domain, levels = custom_order)),]
+
+
+setEPS()
+postscript("Figure1.eps", 
+           family = "Helvetica", 
+           fonts = "Helvetica", 
+           width = 6, height = 4, 
+           pointsize = 7)
+# Create a single forest plot to display the pooled effects of sub-domains
+overall_forest_plot_efdomains_behaviour_biological <- metafor::forest(pooled_effects_efdomains_behaviour_biological_dataframe$Pooled_Effect, 
+                                       ci.lb = pooled_effects_efdomains_behaviour_biological_dataframe$Pooled_cilb, 
+                                       ci.ub = pooled_effects_efdomains_behaviour_biological_dataframe$Pooled_ciub,
+                                       slab = paste(pooled_effects_efdomains_behaviour_biological_dataframe$Domain),
+                                       xlim = c(-15, 22),  # Adjust as needed
+                                       at=c(-2, 0,2),
+                                       mlab	= TRUE,
+ilab=cbind(pooled_effects_efdomains_behaviour_biological_dataframe$Pooled_k,pooled_effects_efdomains_behaviour_biological_dataframe$Pooled_nlevel,pooled_effects_efdomains_behaviour_biological_dataframe$Pooled_pval),
+                                       ilab.xpos=c(5,7,10),
+                                       addsummary = TRUE,
+                                       addpred=TRUE,
+                                       header = "Exective Function Domain",
+                                       xlab = "Hedges' g",
+                                       digits = 3)
+
+text(-5.8, c(8.4),pos=4, expression(bold("Favors NDC Group  Favors Neurotypical Group")))
+text(5, c(9), expression(bold("k")))
+text(7, c(9), expression(bold("n")))
+text(10, c(9), expression(bold("p")))
+dev.off()
+
+
+# Display the overall forest plot
+# print(overall_forest_plot_efdomains_behaviour_biological)
+
+cat("less than three studies, not suitable for meta-analysis:", paste(skipped_domains_norf_lessstudyonly, collapse = ", "),"\n") 
+skipped_norf_datasets <- NDDx_summary_ef_only_behavioural[NDDx_summary_ef_only_behavioural$Domain_code %in% skipped_domains_norf_lessstudyonly, ]
+# writexl::write_xlsx(skipped_norf_datasets,"NDDx_control_effectsizes_EF_no_rf_perdomain_skippedstudies_just_removed_outliers.xlsx",col_names=TRUE)
+writexl::write_xlsx(pooled_effects_efdomains_behaviour_biological_dataframe,"pooled_effects_efdomains_behaviour_biological_dataframe_just_removed_outliers.xlsx",col_names=TRUE)
+
+```
+
+## Step 4 EF domain effect (only rating form level 2)
+
+```{r}
+
+skipped_domains_lessstudyonly_rf_level2 <-c()
+EF_domains_rf_level2<-c()
+EF_domains_rf_level2_pooled_ef <- list()
+EF_domains_rf_level2_pooled_ci_lb <- list()
+EF_domains_rf_level2_pooled_ci_ub <- list()
+temp<-list()
+flag = 1
+for (domain_label in unique(NDDx_summary_ef_level2$Domain_code)){
+  each_ef_domain_dataset_rf_level2 <- c()
+  each_ef_domain_dataset_rf_level2 <-NDDx_summary_ef_level2%>% filter(NDDx_summary_ef_level2$Domain_code== domain_label)
+  #print(domain_label)
+  if(length(unique(each_ef_domain_dataset_rf_level2$Study.No.)) <=2){
+    skipped_domains_lessstudyonly_rf_level2<-c(skipped_domains_lessstudyonly_rf_level2, domain_label)
+    next
+  }
+  print(domain_string(domain_label))
+  EF_domains_rf_level2[[flag]] <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, data=each_ef_domain_dataset_rf_level2, slab=paste(each_ef_domain_dataset_rf_level2$Study.No.,sep=""))
+
+  forest_plot_ef_rf_level2<-metafor::forest(EF_domains_rf_level2[[flag]],addpred=TRUE,header=TRUE)
+  text(x = 0, y = nrow(each_ef_domain_dataset_rf_level2) + 1, labels = domain_label, pos = 3)
+
+
+   # Extract pooled effect size from each domain_label
+  pooled_effect <- EF_domains_rf_level2[[flag]]$b
+  pooled_effect_ci_lb <- EF_domains_rf_level2[[flag]]$ci.lb
+  pooled_effect_ci_ub <- EF_domains_rf_level2[[flag]]$ci.ub
+
+  EF_domains_rf_level2_pooled_ef[[flag]]<-pooled_effect
+  EF_domains_rf_level2_pooled_ci_lb[[flag]]<-pooled_effect_ci_lb
+  EF_domains_rf_level2_pooled_ci_ub[[flag]]<-pooled_effect_ci_ub
+
+  current_data <- data.frame(
+  Domain = domain_string(domain_label),
+  Pooled_Effect = unlist(EF_domains_rf_level2_pooled_ef[[flag]][,1]),
+  Pooled_cilb = unlist(EF_domains_rf_level2_pooled_ci_lb[[flag]]),
+  Pooled_ciub  = unlist(EF_domains_rf_level2_pooled_ci_ub[[flag]])
+
+  )
+
+  temp[[flag]]<-current_data
+  flag  = flag +1
+
+}
+
+
+# Combine all data frames in the list into one data frame
+pooled_effects_efdomains_ratingform_dataframe_level2 <- do.call(rbind, temp)
+
+# Create a single forest plot to display the pooled effects of sub-domains
+overall_forest_plot_efdomains_ratingform_level2 <- metafor::forest(pooled_effects_efdomains_ratingform_dataframe_level2$Pooled_Effect,
+                                       ci.lb = pooled_effects_efdomains_ratingform_dataframe_level2$Pooled_cilb,
+                                       ci.ub = pooled_effects_efdomains_ratingform_dataframe_level2$Pooled_ciub,
+                                       slab = paste(pooled_effects_efdomains_ratingform_dataframe_level2$Domain),
+                                       xlim = c(-5, 8),  # Adjust as needed
+                                       addsummary = TRUE,
+                                       addpred=TRUE,
+                                       header = "Executive Function Rating Form Domains (Level 2)",
+                                       xlab = "Hedges' g",
+                                       digits = 3)
+
+
+cat("less than three studies, not suitable for meta-analysis:", paste(skipped_domains_lessstudyonly_rf_level2, collapse = ", "),"\n")
+skipped_datasets_rf_level2 <- NDDx_summary_ef_level2[NDDx_summary_ef_level2$Domain_code %in% skipped_domains_lessstudyonly_rf_level2, ]
+# View(skipped_datasets)
+writexl::write_xlsx(skipped_datasets_rf_level2,"NDDx_control_effectsizes_EF_ratingform_level2_skippedstudies_just_removed_outliers.xlsx",col_names=TRUE)
+
+```
+
+
+# -------------------------
+#   - Moderator Analysis-
+# -------------------------
+# Intercepts: β0, denotes the average true effect/outcome when the values of all moderator variables are equal to zero.
+
+# Moderator Analysis (Attention)
+
+## Step 1. Age categorical
+
+
+```{r}
+age_moderator_categorical_attention_overall_QE<-list()
+age_moderator_categorical_attention_overall_QEdf<-list()
+age_moderator_categorical_attention_overall_QE_p<-list()
+age_moderator_categorical_attention_overall_QM<-list()
+age_moderator_categorical_attention_overall_QMdf<-list()
+age_moderator_categorical_attention_overall_QM_p<-list()
+age_moderator_categorical_attention_overall_I_sqr<-list()
+age_moderator_categorical_attention_overall_tau2<-list()
+age_moderator_categorical_attention_overall_sigma2<-list()
+age_moderator_categorical_attention_overall_nlevel<-list()
+age_moderator_categorical_attention_overall_k<-list()
+
+study_info<-NDDx_summary_attention %>%
+  group_by(Age.group.broader) %>%
+  summarise(
+  num_unique_studies = n_distinct(Study.No.),
+  num_outcomes = n()
+)
+print(study_info)
+age_moderator_categorical_attention_overall <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, mods = ~factor(`Age.group.broader`), data=NDDx_summary_attention,
+                  slab=paste(NDDx_summary_attention$Study_year,sep=""))
+summary(age_moderator_categorical_attention_overall, digits=3)
+age_moderator_categorical_attention <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, mods = ~factor(`Age.group.broader`)-1, data=NDDx_summary_attention,
+                  slab=paste(NDDx_summary_attention$Study_year,sep=""))
+summary(age_moderator_categorical_attention, digits=3)
+
+
+cat("individual estimate, se, zval, pval, cilb,ciub are provided, therefore not saved in xlsx","\n")
+cat("however, overall results are in the excel files\n")
+age_moderator_categorical_attention_overall_nlevel<-age_moderator_categorical_attention$s.nlevels
+age_moderator_categorical_attention_overall_k<-age_moderator_categorical_attention$k.eff
+age_moderator_categorical_attention_overall_tau2<-age_moderator_categorical_attention$tau2
+age_moderator_categorical_attention_overall_sigma2<-case_when(
+    TRUE ~ sprintf("%.3f", age_moderator_categorical_attention$sigma2)
+)
+age_moderator_categorical_attention_overall_I_sqr<- mapply(I_squared,age_moderator_categorical_attention$tau2, age_moderator_categorical_attention$sigma2)
+
+age_moderator_categorical_attention_overall_QE <-age_moderator_categorical_attention$QE
+age_moderator_categorical_attention_overall_QEdf <-age_moderator_categorical_attention$QEdf
+age_moderator_categorical_attention_overall_QE_p <-mapply(p_value,age_moderator_categorical_attention$QEp)
+age_moderator_categorical_attention_overall_QM <-age_moderator_categorical_attention$QM
+age_moderator_categorical_attention_overall_QMdf <-age_moderator_categorical_attention$QMdf
+age_moderator_categorical_attention_overall_QM_p <-mapply(p_value,age_moderator_categorical_attention$QMp)
+
+age_moderator_categorical_attention_dataframe <- data.frame(
+
+    Pooled_nlevel = age_moderator_categorical_attention_overall_nlevel,
+    Pooled_I2= age_moderator_categorical_attention_overall_I_sqr,
+    Pooled_k= age_moderator_categorical_attention_overall_k,
+    Pooled_tau2= age_moderator_categorical_attention_overall_tau2,
+    Pooled_sigma2= age_moderator_categorical_attention_overall_sigma2,
+
+    Pooled_QE= age_moderator_categorical_attention_overall_QE,
+    Pooled_QEdf= age_moderator_categorical_attention_overall_QEdf[[1]],
+    Pooled_QE_p= age_moderator_categorical_attention_overall_QE_p,
+    Pooled_QM= age_moderator_categorical_attention_overall_QM,
+    Pooled_QMdf= age_moderator_categorical_attention_overall_QMdf[[1]],
+    Pooled_QM_p= age_moderator_categorical_attention_overall_QM_p
+
+
+)
+# writexl::write_xlsx(age_moderator_categorical_attention_dataframe,"age_moderator_categorical_attention_dataframe_just_removed_outliers.xlsx",col_names=TRUE)
+
+
+es_age<-list()
+cilb_age<-list()
+ciub_age<-list()
+current<-list()
+pooled_pval<-list()
+pooled_n<-list()
+pooled_k<-list()
+
+flag <-1
+## Gathering individual subset data information
+for (i in age_moderator_categorical_attention$btt){# "b" is a variable records factor estimates
+  es_age[[i]] <-age_moderator_categorical_attention$b[i]
+  cilb_age[[i]] <-age_moderator_categorical_attention$ci.lb[i]
+  ciub_age[[i]] <-age_moderator_categorical_attention$ci.ub[i]
+  pooled_pval[[i]] <-mapply(p_value,age_moderator_categorical_attention$pval[i])
+  pooled_n[[i]]<-study_info$num_unique_studies[i]
+  pooled_k[[i]]<-study_info$num_outcomes[i]
+
+  current[[flag]] <-data.frame(
+    Agegroup =age_string(i),
+    Pooled_Effect = unlist(es_age[[i]]),
+    Pooled_cilb = unlist(cilb_age[[i]]),
+    Pooled_ciub  = unlist(ciub_age[[i]]),
+    Pooled_p  = unlist(pooled_pval[[i]]),
+    Pooled_n=unlist(pooled_n[[i]]),
+    Pooled_k=unlist(pooled_k[[i]])
+
+  )
+  flag = flag +1
+  
+} 
+
+
+dataframe_attention_age_overall<-do.call(rbind,current)
+
+
+```
+### Additional Anlaysis - Infancy group non-significant results - Need TOST test
+```{r}
+## note: modify equivalence boundaries based on G*power calculation
+TOSTmeta(ES = 0.05, se = 0.107, low_eqbound_d=-0.2, high_eqbound_d=0.2, alpha=0.05)
+
+```
+
+## Step 2. Gender %male (continuous)
+
+```{r}
+gender_moderator_continuous_attention_overall_QE<-list()
+gender_moderator_continuous_attention_overall_QEdf<-list()
+gender_moderator_continuous_attention_overall_QE_p<-list()
+gender_moderator_continuous_attention_overall_QM<-list()
+gender_moderator_continuous_attention_overall_QMdf<-list()
+gender_moderator_continuous_attention_overall_QM_p<-list()
+gender_moderator_continuous_attention_overall_I_sqr<-list()
+gender_moderator_continuous_attention_overall_tau2<-list()
+gender_moderator_continuous_attention_overall_sigma2<-list()
+gender_moderator_continuous_attention_overall_nlevel<-list()
+gender_moderator_continuous_attention_overall_k<-list()
+
+
+
+gender_moderator_continuous_attention <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, mods = ~`Gender....NDDx.of.Males.`, data=NDDx_summary_attention,
+                  slab=paste(NDDx_summary_attention$Study.No.,sep=""))
+print(gender_moderator_continuous_attention, digits=3)
+
+
+gender_moderator_continuous_attention_overall_nlevel<-gender_moderator_continuous_attention$s.nlevels
+gender_moderator_continuous_attention_overall_k<-gender_moderator_continuous_attention$k.eff
+gender_moderator_continuous_attention_overall_tau2<-gender_moderator_continuous_attention$tau2
+gender_moderator_continuous_attention_overall_sigma2<-case_when(
+    TRUE ~ sprintf("%.3f", gender_moderator_continuous_attention$sigma2)
+)
+gender_moderator_continuous_attention_overall_I_sqr<- mapply(I_squared,gender_moderator_continuous_attention$tau2, gender_moderator_continuous_attention$sigma2)
+
+gender_moderator_continuous_attention_overall_QE <-gender_moderator_continuous_attention$QE
+gender_moderator_continuous_attention_overall_QEdf <-gender_moderator_continuous_attention$QEdf
+gender_moderator_continuous_attention_overall_QE_p <-mapply(p_value,gender_moderator_continuous_attention$QEp)
+gender_moderator_continuous_attention_overall_QM <-gender_moderator_continuous_attention$QM
+gender_moderator_continuous_attention_overall_QMdf <-gender_moderator_continuous_attention$QMdf
+gender_moderator_continuous_attention_overall_QM_p <-mapply(p_value,gender_moderator_continuous_attention$QMp)
+
+gender_moderator_continuous_attention_dataframe <- data.frame(
+  
+    Pooled_nlevel = gender_moderator_continuous_attention_overall_nlevel,
+    Pooled_I2= gender_moderator_continuous_attention_overall_I_sqr,
+    Pooled_k= gender_moderator_continuous_attention_overall_k,
+    Pooled_tau2= gender_moderator_continuous_attention_overall_tau2,
+    Pooled_sigma2= gender_moderator_continuous_attention_overall_sigma2,
+  
+    Pooled_QE= gender_moderator_continuous_attention_overall_QE,
+    Pooled_QEdf= gender_moderator_continuous_attention_overall_QEdf[[1]],
+    Pooled_QE_p= gender_moderator_continuous_attention_overall_QE_p,
+    Pooled_QM= gender_moderator_continuous_attention_overall_QM,
+    Pooled_QMdf= gender_moderator_continuous_attention_overall_QMdf[[1]],
+    Pooled_QM_p= gender_moderator_continuous_attention_overall_QM_p
+
+
+)
+# writexl::write_xlsx(gender_moderator_continuous_attention_dataframe,"gender_moderator_continuous_attention_dataframe_just_removed_outliers.xlsx",col_names=TRUE)
+```
+
+## Step 3.NDDx diagnosis_code
+
+```{r}
+nddxdiagnosis_moderator_categoritical_attention_overall_QE<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_QEdf<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_QE_p<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_QM<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_QMdf<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_QM_p<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_I_sqr<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_tau2<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_sigma2<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_nlevel<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_k<-list()
+
+
+study_info<-NDDx_summary_attention %>%
+  group_by(NDDx_Diagnosis_code) %>%
+  summarise(
+  num_unique_studies = n_distinct(Study.No.),
+  num_outcomes = n()
+)
+print(study_info)
+
+nddxdiagnosis_moderator_categoritical_attention_Overall <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, mods =~factor(`NDDx_Diagnosis_code`), data=NDDx_summary_attention,
+                  slab=paste(NDDx_summary_attention$Study.No.,sep=""))
+print(nddxdiagnosis_moderator_categoritical_attention_Overall, digits=3)
+
+nddxdiagnosis_moderator_categoritical_attention <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, mods =~factor(`NDDx_Diagnosis_code`)-1, data=NDDx_summary_attention,
+                  slab=paste(NDDx_summary_attention$Study.No.,sep=""))
+print(nddxdiagnosis_moderator_categoritical_attention, digits=3)
+
+nddxdiagnosis_moderator_categoritical_attention_overall_nlevel<-nddxdiagnosis_moderator_categoritical_attention$s.nlevels
+nddxdiagnosis_moderator_categoritical_attention_overall_k<-nddxdiagnosis_moderator_categoritical_attention$k.eff
+nddxdiagnosis_moderator_categoritical_attention_overall_tau2<-nddxdiagnosis_moderator_categoritical_attention$tau2
+nddxdiagnosis_moderator_categoritical_attention_overall_sigma2<-case_when(
+    TRUE ~ sprintf("%.3f", nddxdiagnosis_moderator_categoritical_attention$sigma2)
+)
+nddxdiagnosis_moderator_categoritical_attention_overall_I_sqr<- mapply(I_squared,nddxdiagnosis_moderator_categoritical_attention$tau2, nddxdiagnosis_moderator_categoritical_attention$sigma2)
+
+nddxdiagnosis_moderator_categoritical_attention_overall_QE <-nddxdiagnosis_moderator_categoritical_attention$QE
+nddxdiagnosis_moderator_categoritical_attention_overall_QEdf <-nddxdiagnosis_moderator_categoritical_attention$QEdf
+nddxdiagnosis_moderator_categoritical_attention_overall_QE_p <-mapply(p_value,nddxdiagnosis_moderator_categoritical_attention$QEp)
+nddxdiagnosis_moderator_categoritical_attention_overall_QM <-nddxdiagnosis_moderator_categoritical_attention$QM
+nddxdiagnosis_moderator_categoritical_attention_overall_QMdf <-nddxdiagnosis_moderator_categoritical_attention$QMdf
+nddxdiagnosis_moderator_categoritical_attention_overall_QM_p <-mapply(p_value,nddxdiagnosis_moderator_categoritical_attention$QMp)
+
+nddxdiagnosis_moderator_categoritical_attention_dataframe <- data.frame(
+  
+    Pooled_nlevel = nddxdiagnosis_moderator_categoritical_attention_overall_nlevel,
+    Pooled_I2= nddxdiagnosis_moderator_categoritical_attention_overall_I_sqr,
+    Pooled_k= nddxdiagnosis_moderator_categoritical_attention_overall_k,
+    Pooled_tau2= nddxdiagnosis_moderator_categoritical_attention_overall_tau2,
+    Pooled_sigma2= nddxdiagnosis_moderator_categoritical_attention_overall_sigma2,
+  
+    Pooled_QE= nddxdiagnosis_moderator_categoritical_attention_overall_QE,
+    Pooled_QEdf= nddxdiagnosis_moderator_categoritical_attention_overall_QEdf[[1]],
+    Pooled_QE_p= nddxdiagnosis_moderator_categoritical_attention_overall_QE_p,
+    Pooled_QM= nddxdiagnosis_moderator_categoritical_attention_overall_QM,
+    Pooled_QMdf= nddxdiagnosis_moderator_categoritical_attention_overall_QMdf[[1]],
+    Pooled_QM_p= nddxdiagnosis_moderator_categoritical_attention_overall_QM_p
+
+
+)
+# writexl::write_xlsx(nddxdiagnosis_moderator_categoritical_attention_dataframe,"nddxdiagnosis_moderator_categoritical_attention_dataframe_just_removed_outliers.xlsx",col_names=TRUE)
+
+```
+## Step 3.1 NDDx diagnosis_code (N<3 NDC diagnosis code removed)
+
+```{r}
+toskip_ndc<-c()
+for (ndc_code in unique(NDDx_summary_attention$NDDx_Diagnosis_code)){
+
+  NDDx_summary_subscale_diagnosis_code_specific <- c()
+  NDDx_summary_subscale_diagnosis_code_specific <-NDDx_summary_attention %>% filter(NDDx_summary_attention$NDDx_Diagnosis_code ==ndc_code)
+  cat("current domain", paste(ndc_code,"study no: ",length(unique(NDDx_summary_subscale_diagnosis_code_specific$Study.No.))), collapse = ", ","\n")
+
+  if(n_distinct(NDDx_summary_subscale_diagnosis_code_specific$Study.No.) <3){
+    print("yes")
+    print(ndc_code)
+    toskip_ndc<-c(toskip_ndc, ndc_code)
+    next
+  }
+}
+cat("less than three studies, not suitable for meta-analysis:", paste(toskip_ndc, collapse = ", "),"\n") 
+
+NDDx_summary_attention_morethan2<-NDDx_summary_attention[!(NDDx_summary_attention$NDDx_Diagnosis_code %in% toskip_ndc),]
+
+nddxdiagnosis_moderator_categoritical_attention_overall_QE<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_QEdf<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_QE_p<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_QM<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_QMdf<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_QM_p<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_I_sqr<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_tau2<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_sigma2<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_nlevel<-list()
+nddxdiagnosis_moderator_categoritical_attention_overall_k<-list()
+
+
+study_info<-NDDx_summary_attention_morethan2 %>%
+  group_by(NDDx_Diagnosis_code) %>%
+  summarise(
+  num_unique_studies = n_distinct(Study.No.),
+  num_outcomes = n()
+)
+print(study_info)
+
+nddxdiagnosis_moderator_categoritical_attention_Overall <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, mods =~factor(`NDDx_Diagnosis_code`), data=NDDx_summary_attention_morethan2,
+                  slab=paste(NDDx_summary_attention_morethan2$Study.No.,sep=""))
+print(nddxdiagnosis_moderator_categoritical_attention_Overall, digits=3)
+
+nddxdiagnosis_moderator_categoritical_attention <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, mods =~factor(`NDDx_Diagnosis_code`)-1, data=NDDx_summary_attention_morethan2,
+                  slab=paste(NDDx_summary_attention_morethan2$Study.No.,sep=""))
+print(nddxdiagnosis_moderator_categoritical_attention, digits=3)
+
+nddxdiagnosis_moderator_categoritical_attention_overall_nlevel<-nddxdiagnosis_moderator_categoritical_attention$s.nlevels
+nddxdiagnosis_moderator_categoritical_attention_overall_k<-nddxdiagnosis_moderator_categoritical_attention$k.eff
+nddxdiagnosis_moderator_categoritical_attention_overall_tau2<-nddxdiagnosis_moderator_categoritical_attention$tau2
+nddxdiagnosis_moderator_categoritical_attention_overall_sigma2<-case_when(
+    TRUE ~ sprintf("%.3f", nddxdiagnosis_moderator_categoritical_attention$sigma2)
+)
+nddxdiagnosis_moderator_categoritical_attention_overall_I_sqr<- mapply(I_squared,nddxdiagnosis_moderator_categoritical_attention$tau2, nddxdiagnosis_moderator_categoritical_attention$sigma2)
+
+nddxdiagnosis_moderator_categoritical_attention_overall_QE <-nddxdiagnosis_moderator_categoritical_attention$QE
+nddxdiagnosis_moderator_categoritical_attention_overall_QEdf <-nddxdiagnosis_moderator_categoritical_attention$QEdf
+nddxdiagnosis_moderator_categoritical_attention_overall_QE_p <-mapply(p_value,nddxdiagnosis_moderator_categoritical_attention$QEp)
+nddxdiagnosis_moderator_categoritical_attention_overall_QM <-nddxdiagnosis_moderator_categoritical_attention$QM
+nddxdiagnosis_moderator_categoritical_attention_overall_QMdf <-nddxdiagnosis_moderator_categoritical_attention$QMdf
+nddxdiagnosis_moderator_categoritical_attention_overall_QM_p <-mapply(p_value,nddxdiagnosis_moderator_categoritical_attention$QMp)
+
+nddxdiagnosis_moderator_categoritical_attention_dataframe <- data.frame(
+  
+    Pooled_nlevel = nddxdiagnosis_moderator_categoritical_attention_overall_nlevel,
+    Pooled_I2= nddxdiagnosis_moderator_categoritical_attention_overall_I_sqr,
+    Pooled_k= nddxdiagnosis_moderator_categoritical_attention_overall_k,
+    Pooled_tau2= nddxdiagnosis_moderator_categoritical_attention_overall_tau2,
+    Pooled_sigma2= nddxdiagnosis_moderator_categoritical_attention_overall_sigma2,
+  
+    Pooled_QE= nddxdiagnosis_moderator_categoritical_attention_overall_QE,
+    Pooled_QEdf= nddxdiagnosis_moderator_categoritical_attention_overall_QEdf[[1]],
+    Pooled_QE_p= nddxdiagnosis_moderator_categoritical_attention_overall_QE_p,
+    Pooled_QM= nddxdiagnosis_moderator_categoritical_attention_overall_QM,
+    Pooled_QMdf= nddxdiagnosis_moderator_categoritical_attention_overall_QMdf[[1]],
+    Pooled_QM_p= nddxdiagnosis_moderator_categoritical_attention_overall_QM_p
+
+
+)
+# writexl::write_xlsx(nddxdiagnosis_moderator_categoritical_attention_dataframe,"nddxdiagnosis_moderator_categoritical_attention_dataframe_just_removed_outliers.xlsx",col_names=TRUE)
+```
+
+## Step 4.Type of measure
+
+```{r}
+tom_moderator_categoritical_attention_overall_QE<-list()
+tom_moderator_categoritical_attention_overall_QEdf<-list()
+tom_moderator_categoritical_attention_overall_QE_p<-list()
+tom_moderator_categoritical_attention_overall_QM<-list()
+tom_moderator_categoritical_attention_overall_QMdf<-list()
+tom_moderator_categoritical_attention_overall_QM_p<-list()
+tom_moderator_categoritical_attention_overall_I_sqr<-list()
+tom_moderator_categoritical_attention_overall_tau2<-list()
+tom_moderator_categoritical_attention_overall_sigma2<-list()
+tom_moderator_categoritical_attention_overall_nlevel<-list()
+tom_moderator_categoritical_attention_overall_k<-list()
+
+
+study_info<-NDDx_summary_attention %>%
+  group_by(ToM_code) %>%
+  summarise(
+  num_unique_studies = n_distinct(Study.No.),
+  num_outcomes = n()
+)
+print(study_info)
+
+
+tom_moderator_categoritical_attention_overall <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, mods=~factor(`ToM_code`), data=NDDx_summary_attention,
+                  slab=paste(NDDx_summary_attention$Study.No.,sep=""))
+print(tom_moderator_categoritical_attention_overall)
+tom_moderator_categoritical_attention <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, mods =~factor(`ToM_code`)-1, data=NDDx_summary_attention,
+                  slab=paste(NDDx_summary_attention$Study.No.,sep=""))
+print(tom_moderator_categoritical_attention, digits=3)
+
+tom_moderator_categoritical_attention_overall_nlevel<-tom_moderator_categoritical_attention$s.nlevels
+tom_moderator_categoritical_attention_overall_k<-tom_moderator_categoritical_attention$k.eff
+tom_moderator_categoritical_attention_overall_tau2<-tom_moderator_categoritical_attention$tau2
+tom_moderator_categoritical_attention_overall_sigma2<-case_when(
+    TRUE ~ sprintf("%.3f", tom_moderator_categoritical_attention$sigma2)
+)
+tom_moderator_categoritical_attention_overall_I_sqr<- mapply(I_squared,tom_moderator_categoritical_attention$tau2, tom_moderator_categoritical_attention$sigma2)
+
+tom_moderator_categoritical_attention_overall_QE <-tom_moderator_categoritical_attention$QE
+tom_moderator_categoritical_attention_overall_QEdf <-tom_moderator_categoritical_attention$QEdf
+tom_moderator_categoritical_attention_overall_QE_p <-mapply(p_value,tom_moderator_categoritical_attention$QEp)
+tom_moderator_categoritical_attention_overall_QM <-tom_moderator_categoritical_attention$QM
+tom_moderator_categoritical_attention_overall_QMdf <-tom_moderator_categoritical_attention$QMdf
+tom_moderator_categoritical_attention_overall_QM_p <-mapply(p_value,tom_moderator_categoritical_attention$QMp)
+
+tom_moderator_categoritical_attention_dataframe <- data.frame(
+  
+    Pooled_nlevel = tom_moderator_categoritical_attention_overall_nlevel,
+    Pooled_I2= tom_moderator_categoritical_attention_overall_I_sqr,
+    Pooled_k= tom_moderator_categoritical_attention_overall_k,
+    Pooled_tau2= tom_moderator_categoritical_attention_overall_tau2,
+    Pooled_sigma2= tom_moderator_categoritical_attention_overall_sigma2,
+  
+    Pooled_QE= tom_moderator_categoritical_attention_overall_QE,
+    Pooled_QEdf= tom_moderator_categoritical_attention_overall_QEdf[[1]],
+    Pooled_QE_p= tom_moderator_categoritical_attention_overall_QE_p,
+    Pooled_QM= tom_moderator_categoritical_attention_overall_QM,
+    Pooled_QMdf= tom_moderator_categoritical_attention_overall_QMdf[[1]],
+    Pooled_QM_p= tom_moderator_categoritical_attention_overall_QM_p
+
+
+)
+# writexl::write_xlsx(tom_moderator_categoritical_attention_dataframe,"tom_moderator_categoritical_attention_dataframe_just_removed_outliers.xlsx",col_names=TRUE)
+```
+
+
+# --------------------------------------------
+# - Moderator Analysis (EF domains) Level 1
+# --------------------------------------------
+## Step 1.1.1 Age categorical all studies
+
+```{r}
+age_moderator_categorical_ef_level1_and_behaviour_overall_QE<-list()
+age_moderator_categorical_ef_level1_and_behaviour_overall_QEdf<-list()
+age_moderator_categorical_ef_level1_and_behaviour_overall_QE_p<-list()
+age_moderator_categorical_ef_level1_and_behaviour_overall_QM<-list()
+age_moderator_categorical_ef_level1_and_behaviour_overall_QMdf<-list()
+age_moderator_categorical_ef_level1_and_behaviour_overall_QM_p<-list()
+age_moderator_categorical_ef_level1_and_behaviour_overall_I_sqr<-list()
+age_moderator_categorical_ef_level1_and_behaviour_overall_tau2<-list()
+age_moderator_categorical_ef_level1_and_behaviour_overall_sigma2<-list()
+age_moderator_categorical_ef_level1_and_behaviour_overall_nlevel<-list()
+age_moderator_categorical_ef_level1_and_behaviour_overall_k<-list()
+
+study_info<-NDDx_summary_ef_level1_and_behaviour %>%
+  group_by(Age.group.broader) %>%
+  summarise(
+  num_unique_studies = n_distinct(Study.No.),
+  num_outcomes = n()
+)
+print(study_info)
+age_moderator_categorical_ef_level1_and_behaviour_overall <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, method = "REML",mods = ~factor(`Age.group.broader`), data=NDDx_summary_ef_level1_and_behaviour,
+                  slab=paste(NDDx_summary_ef_level1_and_behaviour$Study.No.,sep=""))
+summary(age_moderator_categorical_ef_level1_and_behaviour_overall, digits=3)
+
+age_moderator_categorical_ef_level1_and_behaviour <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, method = "REML",mods = ~factor(`Age.group.broader`)-1, data=NDDx_summary_ef_level1_and_behaviour,
+                  slab=paste(NDDx_summary_ef_level1_and_behaviour$Study.No.,sep=""))
+summary(age_moderator_categorical_ef_level1_and_behaviour, digits=3)
+cat("individual estimate, se, zval, pval, cilb,ciub are provided, therefore not saved in xlsx","\n")
+cat("however, overall results are in the excel files\n")
+
+age_moderator_categorical_ef_level1_and_behaviour_overall_nlevel<-age_moderator_categorical_ef_level1_and_behaviour$s.nlevels
+age_moderator_categorical_ef_level1_and_behaviour_overall_k<-age_moderator_categorical_ef_level1_and_behaviour$k.eff
+age_moderator_categorical_ef_level1_and_behaviour_overall_tau2<-age_moderator_categorical_ef_level1_and_behaviour$tau2
+age_moderator_categorical_ef_level1_and_behaviour_overall_sigma2<-case_when(
+    TRUE ~ sprintf("%.3f", age_moderator_categorical_ef_level1_and_behaviour$sigma2)
+)
+age_moderator_categorical_ef_level1_and_behaviour_overall_I_sqr<- mapply(I_squared,age_moderator_categorical_ef_level1_and_behaviour$tau2, age_moderator_categorical_ef_level1_and_behaviour$sigma2)
+
+age_moderator_categorical_ef_level1_and_behaviour_overall_QE <-age_moderator_categorical_ef_level1_and_behaviour$QE
+age_moderator_categorical_ef_level1_and_behaviour_overall_QEdf <-age_moderator_categorical_ef_level1_and_behaviour$QEdf
+age_moderator_categorical_ef_level1_and_behaviour_overall_QE_p <-mapply(p_value,age_moderator_categorical_ef_level1_and_behaviour$QEp)
+age_moderator_categorical_ef_level1_and_behaviour_overall_QM <-age_moderator_categorical_ef_level1_and_behaviour$QM
+age_moderator_categorical_ef_level1_and_behaviour_overall_QMdf <-age_moderator_categorical_ef_level1_and_behaviour$QMdf
+age_moderator_categorical_ef_level1_and_behaviour_overall_QM_p <-mapply(p_value,age_moderator_categorical_ef_level1_and_behaviour$QMp)
+
+age_moderator_categorical_ef_level1_and_behaviour_dataframe <- data.frame(
+  
+    Pooled_nlevel = age_moderator_categorical_ef_level1_and_behaviour_overall_nlevel,
+    Pooled_I2= age_moderator_categorical_ef_level1_and_behaviour_overall_I_sqr,
+    Pooled_k= age_moderator_categorical_ef_level1_and_behaviour_overall_k,
+    Pooled_tau2= age_moderator_categorical_ef_level1_and_behaviour_overall_tau2,
+    Pooled_sigma2= age_moderator_categorical_ef_level1_and_behaviour_overall_sigma2,
+  
+    Pooled_QE= age_moderator_categorical_ef_level1_and_behaviour_overall_QE,
+    Pooled_QEdf= age_moderator_categorical_ef_level1_and_behaviour_overall_QEdf[[1]],
+    Pooled_QE_p= age_moderator_categorical_ef_level1_and_behaviour_overall_QE_p,
+    Pooled_QM= age_moderator_categorical_ef_level1_and_behaviour_overall_QM,
+    Pooled_QMdf= age_moderator_categorical_ef_level1_and_behaviour_overall_QMdf[[1]],
+    Pooled_QM_p= age_moderator_categorical_ef_level1_and_behaviour_overall_QM_p
+
+
+)
+# writexl::write_xlsx(age_moderator_categorical_ef_level1_and_behaviour_dataframe,"age_moderator_categorical_ef_level1_and_behaviour_dataframe_just_removed_outliers.xlsx",col_names=TRUE)
+
+
+es_age<-list()
+cilb_age<-list()
+ciub_age<-list()
+current<-list()
+pooled_pval<-list()
+pooled_n<-list()
+pooled_k<-list()
+
+flag <-1
+## Gathering individual subset data information
+for (i in age_moderator_categorical_ef_level1_and_behaviour$btt){# "b" is a variable records factor estimates
+  es_age[[i]] <-age_moderator_categorical_ef_level1_and_behaviour$b[i]
+  cilb_age[[i]] <-age_moderator_categorical_ef_level1_and_behaviour$ci.lb[i]
+  ciub_age[[i]] <-age_moderator_categorical_ef_level1_and_behaviour$ci.ub[i]
+  pooled_pval[[i]] <-mapply(p_value,age_moderator_categorical_ef_level1_and_behaviour$pval[i])
+  pooled_n[[i]]<-study_info$num_unique_studies[i]
+  pooled_k[[i]]<-study_info$num_outcomes[i]
+
+  current[[flag]] <-data.frame(
+    Agegroup =age_string(i),
+    Pooled_Effect = unlist(es_age[[i]]),
+    Pooled_cilb = unlist(cilb_age[[i]]),
+    Pooled_ciub  = unlist(ciub_age[[i]]),
+    Pooled_p  = unlist(pooled_pval[[i]]),
+    Pooled_n=unlist(pooled_n[[i]]),
+    Pooled_k=unlist(pooled_k[[i]])
+
+  )
+  flag = flag +1
+  
+} 
+dataframe_overall_ef_level1_and_behaviour_age<-do.call(rbind,current)
+```
+
+## Plotting Figure2
+```{r}
+
+# Convert dimensions from millimeters to inches
+width_mm <- 180  # width in millimeters
+height_mm <- 210 # height in millimeters
+
+width_in <- width_mm / 25.4  # Convert to inches
+height_in <- height_mm / 25.4 # Convert to inches
+# setEPS()
+postscript("Forestplots_Figure2.eps", width = width_in, height = height_in, family = "Helvetica")
+
+par(mfrow = c(2, 1), mar = c(5, 4, 4, 2) + 0.1, oma = c(3, 1, 3, 1), 
+    family = "Helvetica", cex = 0.7, cex.lab = 0.7, cex.axis = 0.7, cex.main = 0.8)
+# Create a single forest plot to display the pooled effects of sub-domains
+overall_forest_plot_attention_age <- metafor::forest(dataframe_attention_age_overall$Pooled_Effect,
+                                       ci.lb = dataframe_attention_age_overall$Pooled_cilb,
+                                       ci.ub = dataframe_attention_age_overall$Pooled_ciub,
+                                       slab = paste(dataframe_attention_age_overall$Agegroup),
+                                       ilab=cbind(dataframe_attention_age_overall$Pooled_k,dataframe_attention_age_overall$Pooled_n,dataframe_attention_age_overall$Pooled_p),
+                                       ilab.xpos=c(5,7,10),
+                                       at=c(-2,0,2),
+                                       xlim = c(-15, 22),  # Adjust as needed
+                                       # addsummary = TRUE,
+                                       # addpred=TRUE,
+                                       header = "Age group",
+                                       xlab = "Hedges' g",
+                                       digits = 3)
+text(-9, c(4.2),pos=4, expression(bold("Favors NDC Group  Favors Neurotypical Group")))
+text(5, c(5), expression(bold("k")))
+text(7, c(5), expression(bold("n")))
+text(10, c(5), expression(bold("p")))
+text(0, c(5.5),pos=4, expression(bold("Attention")))
+mtext("(A)", side = 1, line = 5, at = mean(par("usr")[1:2]), cex = 0.7, family = "Helvetica")
+
+
+# Create a single forest plot to display the pooled effects of sub-domains
+overall_forest_plot_EF_level1_age <- metafor::forest(dataframe_overall_ef_level1_and_behaviour_age$Pooled_Effect,
+                                       ci.lb = dataframe_overall_ef_level1_and_behaviour_age$Pooled_cilb,
+                                       ci.ub = dataframe_overall_ef_level1_and_behaviour_age$Pooled_ciub,
+                                       slab = paste(dataframe_overall_ef_level1_and_behaviour_age$Agegroup),
+                                       xlim = c(-15, 22),  # Adjust as needed
+                                       at = c(-2,0,2),
+                                      mlab	= TRUE,
+ilab= cbind(dataframe_overall_ef_level1_and_behaviour_age$Pooled_k,dataframe_overall_ef_level1_and_behaviour_age$Pooled_n,dataframe_overall_ef_level1_and_behaviour_age$Pooled_p),
+                                       ilab.xpos=c(5,7,10),
+                                       # addsummary = TRUE,
+                                       # addpred=TRUE,
+                                       header = "Age group",
+                                       xlab = "Hedges' g",
+                                       digits = 3)
+text(0, c(5.5),pos=4, expression(bold("Executive Function")))
+text(-9, c(4.2),pos=4, expression(bold("Favors NDC Group  Favors Neurotypical Group")))
+text(5, c(5), expression(bold("k")))
+text(7, c(5), expression(bold("n")))
+text(10, c(5), expression(bold("p")))
+mtext("(B)", side = 1, line = 5, at = mean(par("usr")[1:2]), cex = 0.7, family = "Helvetica")
+
+dev.off()
+```
+### Additional analysis on equivlance test
+```{r}
+## note: modify equivalence boundaries based on G*power calculation
+TOSTmeta(ES = -0.444, se = 0.346, low_eqbound_d=-0.2, high_eqbound_d=0.2, alpha=0.05)
+```
+
+## Step 2. Gender %male (continuous) overall EF effect
+
+```{r}
+
+
+gender_moderator_continuous_ef_level1_and_behaviour_overall_QE<-list()
+gender_moderator_continuous_ef_level1_and_behaviour_overall_QEdf<-list()
+gender_moderator_continuous_ef_level1_and_behaviour_overall_QE_p<-list()
+gender_moderator_continuous_ef_level1_and_behaviour_overall_QM<-list()
+gender_moderator_continuous_ef_level1_and_behaviour_overall_QMdf<-list()
+gender_moderator_continuous_ef_level1_and_behaviour_overall_QM_p<-list()
+gender_moderator_continuous_ef_level1_and_behaviour_overall_I_sqr<-list()
+gender_moderator_continuous_ef_level1_and_behaviour_overall_tau2<-list()
+gender_moderator_continuous_ef_level1_and_behaviour_overall_sigma2<-list()
+gender_moderator_continuous_ef_level1_and_behaviour_overall_nlevel<-list()
+gender_moderator_continuous_ef_level1_and_behaviour_overall_k<-list()
+gender_moderator_continuous_ef_level1_and_behaviour <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, mods =~ `Gender....NDDx.of.Males.`, data=NDDx_summary_ef_level1_and_behaviour,
+                  slab=paste(NDDx_summary_ef_level1_and_behaviour$Study.No.,sep=""))
+summary(gender_moderator_continuous_ef_level1_and_behaviour, digits=3)
+
+gender_moderator_continuous_ef_level1_and_behaviour_overall_nlevel<-gender_moderator_continuous_ef_level1_and_behaviour$s.nlevels
+gender_moderator_continuous_ef_level1_and_behaviour_overall_k<-gender_moderator_continuous_ef_level1_and_behaviour$k.eff
+gender_moderator_continuous_ef_level1_and_behaviour_overall_tau2<-gender_moderator_continuous_ef_level1_and_behaviour$tau2
+gender_moderator_continuous_ef_level1_and_behaviour_overall_sigma2<-case_when(
+    TRUE ~ sprintf("%.3f", gender_moderator_continuous_ef_level1_and_behaviour$sigma2)
+)
+gender_moderator_continuous_ef_level1_and_behaviour_overall_I_sqr<- mapply(I_squared,gender_moderator_continuous_ef_level1_and_behaviour$tau2, gender_moderator_continuous_ef_level1_and_behaviour$sigma2)
+
+gender_moderator_continuous_ef_level1_and_behaviour_overall_QE <-gender_moderator_continuous_ef_level1_and_behaviour$QE
+gender_moderator_continuous_ef_level1_and_behaviour_overall_QEdf <-gender_moderator_continuous_ef_level1_and_behaviour$QEdf
+gender_moderator_continuous_ef_level1_and_behaviour_overall_QE_p <-mapply(p_value,gender_moderator_continuous_ef_level1_and_behaviour$QEp)
+gender_moderator_continuous_ef_level1_and_behaviour_overall_QM <-gender_moderator_continuous_ef_level1_and_behaviour$QM
+gender_moderator_continuous_ef_level1_and_behaviour_overall_QMdf <-gender_moderator_continuous_ef_level1_and_behaviour$QMdf
+gender_moderator_continuous_ef_level1_and_behaviour_overall_QM_p <-mapply(p_value,gender_moderator_continuous_ef_level1_and_behaviour$QMp)
+
+gender_moderator_continuous_ef_level1_and_behaviour_dataframe <- data.frame(
+  
+    Pooled_nlevel = gender_moderator_continuous_ef_level1_and_behaviour_overall_nlevel,
+    Pooled_I2= gender_moderator_continuous_ef_level1_and_behaviour_overall_I_sqr,
+    Pooled_k= gender_moderator_continuous_ef_level1_and_behaviour_overall_k,
+    Pooled_tau2= gender_moderator_continuous_ef_level1_and_behaviour_overall_tau2,
+    Pooled_sigma2= gender_moderator_continuous_ef_level1_and_behaviour_overall_sigma2,
+  
+    Pooled_QE= gender_moderator_continuous_ef_level1_and_behaviour_overall_QE,
+    Pooled_QEdf= gender_moderator_continuous_ef_level1_and_behaviour_overall_QEdf[[1]],
+    Pooled_QE_p= gender_moderator_continuous_ef_level1_and_behaviour_overall_QE_p,
+    Pooled_QM= gender_moderator_continuous_ef_level1_and_behaviour_overall_QM,
+    Pooled_QMdf= gender_moderator_continuous_ef_level1_and_behaviour_overall_QMdf[[1]],
+    Pooled_QM_p= gender_moderator_continuous_ef_level1_and_behaviour_overall_QM_p
+
+
+)
+# writexl::write_xlsx(gender_moderator_continuous_ef_level1_and_behaviour_dataframe,"gender_moderator_continuous_ef_level1_and_behaviour_dataframe_just_removed_outliers.xlsx",col_names=TRUE)
+```
+
+## Step 3.NDDxx diagnosis_code Overall Effect
+
+```{r}
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QE<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QEdf<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QE_p<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QM<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QMdf<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QM_p<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_I_sqr<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_tau2<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_sigma2<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_nlevel<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_k<-list()
+
+study_info<-NDDx_summary_ef_level1_and_behaviour %>%
+  group_by(NDDx_Diagnosis_code) %>%
+  summarise(
+  num_unique_studies = n_distinct(Study.No.),
+  num_outcomes = n()
+)
+print(study_info)
+
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, mods = ~factor(`NDDx_Diagnosis_code`), data=NDDx_summary_ef_level1_and_behaviour,
+                  slab=paste(NDDx_summary_ef_level1_and_behaviour$Study.No.,sep=""))
+summary(nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall, digits=3)
+
+
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, mods = ~factor(`NDDx_Diagnosis_code`)-1, data=NDDx_summary_ef_level1_and_behaviour,
+                  slab=paste(NDDx_summary_ef_level1_and_behaviour$Study.No.,sep=""))
+summary(nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour, digits=3)
+
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_nlevel<-nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$s.nlevels
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_k<-nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$k.eff
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_tau2<-nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$tau2
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_sigma2<-case_when(
+    TRUE ~ sprintf("%.3f", nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$sigma2)
+)
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_I_sqr<- mapply(I_squared,nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$tau2, nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$sigma2)
+
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QE <-nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$QE
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QEdf <-nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$QEdf
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QE_p <-mapply(p_value,nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$QEp)
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QM <-nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$QM
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QMdf <-nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$QMdf
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QM_p <-mapply(p_value,nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$QMp)
+
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_dataframe <- data.frame(
+  
+    Pooled_nlevel = nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_nlevel,
+    Pooled_I2= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_I_sqr,
+    Pooled_k= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_k,
+    Pooled_tau2= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_tau2,
+    Pooled_sigma2= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_sigma2,
+  
+    Pooled_QE= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QE,
+    Pooled_QEdf= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QEdf[[1]],
+    Pooled_QE_p= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QE_p,
+    Pooled_QM= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QM,
+    Pooled_QMdf= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QMdf[[1]],
+    Pooled_QM_p= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QM_p
+
+
+)
+# writexl::write_xlsx(nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_dataframe,"nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_dataframe_just_removed_outliers.xlsx",col_names=TRUE)
+
+```
+## Step 3.1 NDDxx diagnosis_code Overall Effect (N<3 NDC diagnosis code removed)
+
+```{r}
+toskip_ndc<-c()
+for (ndc_code in unique(NDDx_summary_ef_level1_and_behaviour$NDDx_Diagnosis_code)){
+
+  NDDx_summary_subscale_diagnosis_code_specific <- c()
+  NDDx_summary_subscale_diagnosis_code_specific <-NDDx_summary_ef_level1_and_behaviour %>% filter(NDDx_summary_ef_level1_and_behaviour$NDDx_Diagnosis_code ==ndc_code)
+  cat("current domain", paste(ndc_code,"study no: ",length(unique(NDDx_summary_subscale_diagnosis_code_specific$Study.No.))), collapse = ", ","\n")
+
+  if(n_distinct(NDDx_summary_subscale_diagnosis_code_specific$Study.No.) <3){
+    print("yes")
+    print(ndc_code)
+    toskip_ndc<-c(toskip_ndc, ndc_code)
+    next
+  }
+}
+cat("less than three studies, not suitable for meta-analysis:", paste(toskip_ndc, collapse = ", "),"\n") 
+
+NDDx_summary_ef_level1_and_behaviour_morethan2<-NDDx_summary_ef_level1_and_behaviour[!(NDDx_summary_ef_level1_and_behaviour$NDDx_Diagnosis_code %in% toskip_ndc),]
+
+
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QE<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QEdf<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QE_p<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QM<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QMdf<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QM_p<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_I_sqr<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_tau2<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_sigma2<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_nlevel<-list()
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_k<-list()
+
+study_info<-NDDx_summary_ef_level1_and_behaviour_morethan2 %>%
+  group_by(NDDx_Diagnosis_code) %>%
+  summarise(
+  num_unique_studies = n_distinct(Study.No.),
+  num_outcomes = n()
+)
+print(study_info)
+
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, mods = ~factor(`NDDx_Diagnosis_code`), data=NDDx_summary_ef_level1_and_behaviour_morethan2,
+                  slab=paste(NDDx_summary_ef_level1_and_behaviour_morethan2$Study.No.,sep=""))
+summary(nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall, digits=3)
+
+
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, mods = ~factor(`NDDx_Diagnosis_code`)-1, data=NDDx_summary_ef_level1_and_behaviour_morethan2,
+                  slab=paste(NDDx_summary_ef_level1_and_behaviour_morethan2$Study.No.,sep=""))
+summary(nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour, digits=3)
+
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_nlevel<-nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$s.nlevels
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_k<-nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$k.eff
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_tau2<-nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$tau2
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_sigma2<-case_when(
+    TRUE ~ sprintf("%.3f", nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$sigma2)
+)
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_I_sqr<- mapply(I_squared,nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$tau2, nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$sigma2)
+
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QE <-nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$QE
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QEdf <-nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$QEdf
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QE_p <-mapply(p_value,nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$QEp)
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QM <-nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$QM
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QMdf <-nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$QMdf
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QM_p <-mapply(p_value,nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour$QMp)
+
+nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_dataframe <- data.frame(
+  
+    Pooled_nlevel = nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_nlevel,
+    Pooled_I2= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_I_sqr,
+    Pooled_k= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_k,
+    Pooled_tau2= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_tau2,
+    Pooled_sigma2= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_sigma2,
+  
+    Pooled_QE= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QE,
+    Pooled_QEdf= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QEdf[[1]],
+    Pooled_QE_p= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QE_p,
+    Pooled_QM= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QM,
+    Pooled_QMdf= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QMdf[[1]],
+    Pooled_QM_p= nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_overall_QM_p
+
+
+)
+# writexl::write_xlsx(nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_dataframe,"nddxdiagnosis_moderator_categoritical_ef_level1_and_behaviour_dataframe_just_removed_outliers.xlsx",col_names=TRUE)
+
+```
+
+
+
+## Step 4.Type of measure moderator Overall Effect
+
+```{r}
+
+study_info<-NDDx_summary_ef_level1_and_behaviour %>%
+  group_by(ToM_code) %>%
+  summarise(
+  num_unique_studies = n_distinct(Study.No.),
+  num_outcomes = n()
+)
+print(study_info)
+tom_moderator_categoritical_ef_level1_and_behaviour_overall<- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, mods = ~factor(`ToM_code`), data=NDDx_summary_ef_level1_and_behaviour,
+                  slab=paste(NDDx_summary_ef_level1_and_behaviour$Study.No.,sep=""))
+print(tom_moderator_categoritical_ef_level1_and_behaviour_overall, digits=3)
+
+tom_moderator_categoritical_ef_level1_and_behaviour<- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, mods = ~factor(`ToM_code`)-1, data=NDDx_summary_ef_level1_and_behaviour,
+                  slab=paste(NDDx_summary_ef_level1_and_behaviour$Study.No.,sep=""))
+print(tom_moderator_categoritical_ef_level1_and_behaviour, digits=3)
+
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_QE<-list()
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_QEdf<-list()
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_QE_p<-list()
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_QM<-list()
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_QMdf<-list()
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_QM_p<-list()
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_I_sqr<-list()
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_tau2<-list()
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_sigma2<-list()
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_nlevel<-list()
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_k<-list()
+tom_moderator_categoritical_ef_level1_and_behaviour<- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, mods = ~factor(`ToM_code`)-1, data=NDDx_summary_ef_level1_and_behaviour,
+                  slab=paste(NDDx_summary_ef_level1_and_behaviour$Study.No.,sep=""))
+summary(tom_moderator_categoritical_ef_level1_and_behaviour, digits=3)
+
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_nlevel<-tom_moderator_categoritical_ef_level1_and_behaviour$s.nlevels
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_k<-tom_moderator_categoritical_ef_level1_and_behaviour$k.eff
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_tau2<-tom_moderator_categoritical_ef_level1_and_behaviour$tau2
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_sigma2<-case_when(
+    TRUE ~ sprintf("%.3f", tom_moderator_categoritical_ef_level1_and_behaviour$sigma2)
+)
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_I_sqr<- mapply(I_squared,tom_moderator_categoritical_ef_level1_and_behaviour$tau2, tom_moderator_categoritical_ef_level1_and_behaviour$sigma2)
+
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_QE <-tom_moderator_categoritical_ef_level1_and_behaviour$QE
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_QEdf <-tom_moderator_categoritical_ef_level1_and_behaviour$QEdf
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_QE_p <-mapply(p_value,tom_moderator_categoritical_ef_level1_and_behaviour$QEp)
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_QM <-tom_moderator_categoritical_ef_level1_and_behaviour$QM
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_QMdf <-tom_moderator_categoritical_ef_level1_and_behaviour$QMdf
+tom_moderator_categoritical_ef_level1_and_behaviour_overall_QM_p <-mapply(p_value,tom_moderator_categoritical_ef_level1_and_behaviour$QMp)
+
+tom_moderator_categoritical_ef_level1_and_behaviour_dataframe <- data.frame(
+  
+    Pooled_nlevel = tom_moderator_categoritical_ef_level1_and_behaviour_overall_nlevel,
+    Pooled_I2= tom_moderator_categoritical_ef_level1_and_behaviour_overall_I_sqr,
+    Pooled_k= tom_moderator_categoritical_ef_level1_and_behaviour_overall_k,
+    Pooled_tau2= tom_moderator_categoritical_ef_level1_and_behaviour_overall_tau2,
+    Pooled_sigma2= tom_moderator_categoritical_ef_level1_and_behaviour_overall_sigma2,
+  
+    Pooled_QE= tom_moderator_categoritical_ef_level1_and_behaviour_overall_QE,
+    Pooled_QEdf= tom_moderator_categoritical_ef_level1_and_behaviour_overall_QEdf[[1]],
+    Pooled_QE_p= tom_moderator_categoritical_ef_level1_and_behaviour_overall_QE_p,
+    Pooled_QM= tom_moderator_categoritical_ef_level1_and_behaviour_overall_QM,
+    Pooled_QMdf= tom_moderator_categoritical_ef_level1_and_behaviour_overall_QMdf[[1]],
+    Pooled_QM_p= tom_moderator_categoritical_ef_level1_and_behaviour_overall_QM_p
+
+
+)
+# writexl::write_xlsx(tom_moderator_categoritical_ef_level1_and_behaviour_dataframe,"tom_moderator_categoritical_ef_level1_and_behaviour_dataframe_just_removed_outliers.xlsx",col_names=TRUE)
+```
+
+#----------------------------
+# - Remove high-risk group
+#----------------------------
+```{r}
+## Comparing to manual inspection excel sheet, remove data if column "remove" is 1.
+# #remove due to less than 3 subgroups.
+manual_remove_dataframe <- read_excel("NDDx_control_effectsizes_lessthan3subgroupsremoved.xlsx")
+filtered_all_NDDx_control <- filtered_all_NDDx_control[manual_remove_dataframe$Remove==0,]
+# remove highrisks before analysis
+highrisk_code <-c("11","14","15","16","17")
+filtered_all_NDDx_control <- filtered_all_NDDx_control[!(filtered_all_NDDx_control$NDDx_Diagnosis_code %in% highrisk_code), ]
+NDDx_summary <- escalc(yi=yi,vi=vi,data=filtered_all_NDDx_control)
+NDDx_summary_ef <-NDDx_summary%>% filter(NDDx_summary$EF_Attention == "executive function")
+
+## level 1 (sub-scales are not included for the overall study effects)
+
+ef_level1<-c("global executive function","effortful control")
+# NDDx_summary_ef_behaviour_biological_global_effortforcontrol <- NDDx_summary_ef[(NDDx_summary_ef$`Domain (e.g., sustained attention, selective attention, working memory, response inhibition etc)` %in% ef_level1), ] 
+
+# Behavioural is study all to be included, for rating form (only global executive function and eefortful control are included in all future analysis) -EF studies
+strings_to_match <- c( "behavioural","Behavioural")
+strings_rf <- c( "rating form")
+
+NDDx_summary_ef_only_behavioural <- NDDx_summary_ef[
+  grepl(paste(strings_to_match, collapse = "|"), NDDx_summary_ef$Type.of.measure..i.e...biological..behavioural..rating.form., ignore.case = TRUE), ]
+
+NDDx_summary_ef_level1_and_behaviour <- NDDx_summary_ef[
+  grepl(paste(strings_to_match, collapse = "|"), NDDx_summary_ef$Type.of.measure..i.e...biological..behavioural..rating.form., ignore.case = TRUE) |
+  NDDx_summary_ef$`Domain` %in% ef_level1,]
+
+NDDx_summary_ef_level1_and_behaviour_attention_combined <- NDDx_summary[
+  grepl(paste(strings_to_match, collapse = "|"), NDDx_summary$Type.of.measure..i.e...biological..behavioural..rating.form., ignore.case = TRUE) |
+  NDDx_summary$`Domain` %in% ef_level1,]
+#level 2 means all subscales (not global and effortforcontrol) in rating form only EF Studies
+# NDDx_summary_ef_exclude_global_effortforcontrol <- NDDx_summary_ef_ratingform[!(NDDx_summary_ef_ratingform$`Domain` %in% ef_level1), ] 
+
+
+NDDx_summary_ef_ratingform<-NDDx_summary_ef[(NDDx_summary_ef$`Type.of.measure..i.e...biological..behavioural..rating.form.` %in% strings_rf),]
+NDDx_summary_ef_ratingform_level1<-NDDx_summary_ef_level1_and_behaviour[(NDDx_summary_ef_level1_and_behaviour$`Type.of.measure..i.e...biological..behavioural..rating.form.` %in% strings_rf),]
+
+NDDx_summary_ef_level2 <- NDDx_summary_ef_ratingform[!(NDDx_summary_ef_ratingform$`Domain` %in% ef_level1),]
+
+domain_subscales <-c(7,8,9,10,11)
+NDDx_summary_ef_ratingform_subscales <-  NDDx_summary_ef_ratingform[NDDx_summary_ef_ratingform$Domain_code %in% domain_subscales, ] # domains 7-11
+domain_factors <-c(12,13,14)
+NDDx_summary_ef_ratingform_factors <-  NDDx_summary_ef_ratingform[NDDx_summary_ef_ratingform$Domain_code %in% domain_factors, ] # domains 7-11
+
+
+NDDx_summary_attention <-NDDx_summary%>% filter(NDDx_summary$EF_Attention == "attention")
+writexl::write_xlsx(NDDx_summary_ef,"NDDx_control_effectsizes_executivefunction_remove_outlierandhighriskversion.xlsx",col_names=TRUE)
+writexl::write_xlsx(NDDx_summary_ef_level1_and_behaviour,"NDDx_control_effectsizes_executivefunction_global_effortfor_behavioural_remove_outlierandhighriskversion.xlsx",col_names=TRUE)
+writexl::write_xlsx(NDDx_summary_ef_level2,"NDDx_control_effectsizes_executivefunction_subscales_inratingform_remove_outlierandhighriskversion.xlsx",col_names=TRUE)
+writexl::write_xlsx(NDDx_summary_attention,"NDDx_control_effectsizes_attention_remove_outlierandhighriskversion.xlsx",col_names=TRUE)
+writexl::write_xlsx(NDDx_summary_ef_only_behavioural,"NDDx_control_effectsizes_onlybehaviour_remove_outlierandhighriskversion.xlsx",col_names=TRUE)
+writexl::write_xlsx(NDDx_summary_ef_ratingform_level1,"NDDx_control_effectsizes_onlyrf_level1_remove_outlierandhighriskversion.xlsx",col_names=TRUE)
+writexl::write_xlsx(NDDx_summary_ef_level1_and_behaviour_attention_combined,"NDDx_control_effectsizes_attention_and_ef_level1_remove_outlierandhighriskversion.xlsx",col_names=TRUE)
+writexl::write_xlsx(NDDx_summary_ef_ratingform_subscales,"NDDx_control_effectsizes_ef_ratingform_subscales_remove_outlierandhighriskversion.xlsx",col_names=TRUE)
+writexl::write_xlsx(NDDx_summary_ef_ratingform_factors,"NDDx_control_effectsizes_ef_ratingform_factors_remove_outlierandhighriskversion.xlsx",col_names=TRUE)
+
+# View(NDDx_summary_ef)
+# NDDx_summary_ef[, 1] <- as.numeric(as.character(NDDx_summary_ef[, 1]))
+# NDDx_summary_ef[, 6] <- as.numeric(as.character(NDDx_summary_ef[, 6]))
+NDDx_summary_ef_level1_and_behaviour[, 1] <- as.numeric(as.character(NDDx_summary_ef_level1_and_behaviour[, 1]))
+NDDx_summary_ef_level1_and_behaviour[, 6] <- as.numeric(as.character(NDDx_summary_ef_level1_and_behaviour[, 6]))
+NDDx_summary_ef_ratingform_level1[, 1] <- as.numeric(as.character(NDDx_summary_ef_ratingform_level1[, 1]))
+NDDx_summary_ef_ratingform_level1[, 6] <- as.numeric(as.character(NDDx_summary_ef_ratingform_level1[, 6]))
+NDDx_summary_ef_level2[, 1] <- as.numeric(as.character(NDDx_summary_ef_level2[, 1]))
+NDDx_summary_ef_level2[, 6] <- as.numeric(as.character(NDDx_summary_ef_level2[, 6]))
+# View(NDDx_summary_attention)
+NDDx_summary_attention[, 1] <- as.numeric(as.character(NDDx_summary_attention[, 1]))
+NDDx_summary_attention[, 6] <- as.numeric(as.character(NDDx_summary_attention[, 6]))
+NDDx_summary_ef_only_behavioural[, 1] <- as.numeric(as.character(NDDx_summary_ef_only_behavioural[, 1]))
+NDDx_summary_ef_only_behavioural[, 6] <- as.numeric(as.character(NDDx_summary_ef_only_behavioural[, 6]))
+NDDx_summary_ef_level1_and_behaviour_attention_combined[, 1] <- as.numeric(as.character(NDDx_summary_ef_level1_and_behaviour_attention_combined[, 1]))
+NDDx_summary_ef_level1_and_behaviour_attention_combined[, 6] <- as.numeric(as.character(NDDx_summary_ef_level1_and_behaviour_attention_combined[, 6]))
+NDDx_summary_ef_ratingform_subscales[, 1] <- as.numeric(as.character(NDDx_summary_ef_ratingform_subscales[, 1]))
+NDDx_summary_ef_ratingform_subscales[, 6] <- as.numeric(as.character(NDDx_summary_ef_ratingform_subscales[, 6]))
+NDDx_summary_ef_ratingform_factors[, 1] <- as.numeric(as.character(NDDx_summary_ef_ratingform_factors[, 1]))
+NDDx_summary_ef_ratingform_factors[, 6] <- as.numeric(as.character(NDDx_summary_ef_ratingform_factors[, 6]))
+
+
+```
+## Step 2.1: overall random effect (EF level 1 and behaviour)
+
+```{r}
+# Multi-variant random effect (across studies) executive 
+current<-list()
+random_effect_study_ef_level1 <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, data=NDDx_summary_ef_level1_and_behaviour,slab=paste(NDDx_summary_ef_level1_and_behaviour$Study.No.,sep=""))
+summary(random_effect_study_ef_level1, digits=3)
+predict(random_effect_study_ef_level1)
+pooled_effect <- random_effect_study_ef_level1$b
+pooled_effect_ci_lb <- random_effect_study_ef_level1$ci.lb
+pooled_effect_ci_ub <- random_effect_study_ef_level1$ci.ub
+  
+pooled_effect_nlevel <-random_effect_study_ef_level1$s.nlevels # number of studies
+pooled_effect_k <-random_effect_study_ef_level1$k.eff # number of outcomes
+pooled_effect_tau2 <-case_when(
+                                  TRUE ~sprintf("%.3f",random_effect_study_ef_level1$sigma2)
+                      )
+pooled_I2 <- mapply(I_squared,random_effect_study_ef_level1$tau2, random_effect_study_ef_level1$sigma2)
+pooled_pval <-mapply(p_value,random_effect_study_ef_level1$pval)
+pooled_qe <-random_effect_study_ef_level1$QE
+pooled_qedf <-random_effect_study_ef_level1$QEdf
+pooled_qe_p <-mapply(p_value,random_effect_study_ef_level1$QEp)
+pooled_qm <-random_effect_study_ef_level1$QM
+pooled_qmdf <-random_effect_study_ef_level1$QMdf[1]
+pooled_qm_p <-mapply(p_value,random_effect_study_ef_level1$QMp)
+
+  # Create a data frame of pooled effects
+current <- data.frame(
+  Pooled_Effect = unlist(pooled_effect),
+  Pooled_cilb = unlist(pooled_effect_ci_lb),
+  Pooled_ciub  = unlist(pooled_effect_ci_ub),
+  Pooled_nlevel = unlist(pooled_effect_nlevel),
+  Pooled_I2= unlist(pooled_I2),
+  Pooled_pval= unlist(pooled_pval),
+  Pooled_k= unlist(pooled_effect_k),
+  Pooled_tau2= unlist(pooled_effect_tau2),
+  # Pooled_sigma2= unlist(pooled_effect_sigma2),
+  
+  Pooled_QE= unlist(pooled_qe),
+  Pooled_QEdf= unlist(pooled_qedf),
+  Pooled_QE_p= unlist(pooled_qe_p),
+  Pooled_QM= unlist(pooled_qm),
+  Pooled_QMdf= unlist(pooled_qmdf),
+  Pooled_QM_p= unlist(pooled_qm_p)
+
+)
+forest(random_effect_study_ef_level1)
+
+writexl::write_xlsx(current,"pooled_overall_ef_level1_behaviour_outlierandhighriskremoved.xlsx",col_names=TRUE)
+```
+### Step 2.1.1: Funnel plot and trim-and-fill analysis (EF level 1 and behaviour)
+```{r}
+NDDx_summary_ef_level1_and_behaviour$SE<-sqrt(NDDx_summary_ef_level1_and_behaviour$vi)
+Data_meta_means_NDDx_summary_ef_level1_and_behaviour <-
+  NDDx_summary_ef_level1_and_behaviour %>% select(`Study.No.`, `Domain`, yi, SE, vi) %>%
+  group_by(`Study.No.`,) %>%
+  summarise(mean_g=mean(yi),mean_SE=mean(SE), mean_Vi=mean(vi))
+
+eggers_EF <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`,mods = SE, data=NDDx_summary_ef_level1_and_behaviour,slab=paste(NDDx_summary_ef_level1_and_behaviour$`Study.No.`,sep=""))
+## Uni-variant 
+random_effect_study_ef_level1_and_behaviour_univariant <- rma(yi = mean_g, sei = mean_SE, data =Data_meta_means_NDDx_summary_ef_level1_and_behaviour) 
+print(random_effect_study_ef_level1_and_behaviour_univariant,digits=3)
+predict(random_effect_study_ef_level1_and_behaviour_univariant)
+funnel(random_effect_study_ef_level1_and_behaviour_univariant)
+
+taf_ef_level1 <- trimfill(random_effect_study_ef_level1_and_behaviour_univariant, side = "left")
+funnel(taf_ef_level1)
+```
+
+## Step 2.2: overall random effect (Attention)
+
+```{r}
+#Multi-variant random effect (across studies) attention
+current<-list()
+random_effect_study_attention <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`, data=NDDx_summary_attention,slab=paste(NDDx_summary_attention$Study.No.,sep=""))
+summary(random_effect_study_attention, digits=3)
+predict(random_effect_study_attention)
+pooled_effect <- random_effect_study_attention$b
+pooled_effect_ci_lb <- random_effect_study_attention$ci.lb
+pooled_effect_ci_ub <- random_effect_study_attention$ci.ub
+  
+pooled_effect_nlevel <-random_effect_study_attention$s.nlevels # number of studies
+pooled_effect_k <-random_effect_study_attention$k.eff # number of outcomes
+pooled_effect_tau2 <-case_when(
+                                  TRUE ~sprintf("%.3f",random_effect_study_attention$sigma2)
+                      )
+pooled_I2 <- mapply(I_squared,random_effect_study_attention$tau2, random_effect_study_attention$sigma2)
+pooled_pval <-mapply(p_value,random_effect_study_attention$pval)
+pooled_qe <-random_effect_study_attention$QE
+pooled_qedf <-random_effect_study_attention$QEdf
+pooled_qe_p <-mapply(p_value,random_effect_study_attention$QEp)
+pooled_qm <-random_effect_study_attention$QM
+pooled_qmdf <-random_effect_study_attention$QMdf[1]
+pooled_qm_p <-mapply(p_value,random_effect_study_attention$QMp)
+
+  # Create a data frame of pooled effects
+current <- data.frame(
+  Pooled_Effect = unlist(pooled_effect),
+  Pooled_cilb = unlist(pooled_effect_ci_lb),
+  Pooled_ciub  = unlist(pooled_effect_ci_ub),
+  Pooled_nlevel = unlist(pooled_effect_nlevel),
+  Pooled_I2= unlist(pooled_I2),
+  Pooled_pval= unlist(pooled_pval),
+  Pooled_k= unlist(pooled_effect_k),
+  Pooled_tau2= unlist(pooled_effect_tau2),
+  
+  Pooled_QE= unlist(pooled_qe),
+  Pooled_QEdf= unlist(pooled_qedf),
+  Pooled_QE_p= unlist(pooled_qe_p),
+  Pooled_QM= unlist(pooled_qm),
+  Pooled_QMdf= unlist(pooled_qmdf),
+  Pooled_QM_p= unlist(pooled_qm_p)
+
+)
+forest(random_effect_study_attention)
+writexl::write_xlsx(current,"pooled_overall_attention_outlierandhighriskremoved.xlsx",col_names=TRUE)
+```
+
+### Step 2.2.1: Funnel plot and trim-and-fill analysis (Attention)
+```{r}
+NDDx_summary_attention$SE<-sqrt(NDDx_summary_attention$vi)
+Data_meta_means_NDDx_summary_attention <-
+  NDDx_summary_attention %>% select(`Study.No.`, `Domain`, yi, SE, vi) %>%
+  group_by(`Study.No.`,) %>%
+  summarise(mean_g=mean(yi),mean_SE=mean(SE), mean_Vi=mean(vi))
+
+eggers_attention <- rma.mv(yi, vi, random = ~ 1 |`Study.No.`,mods = SE, data=NDDx_summary_attention,slab=paste(NDDx_summary_attention$`Study.No.`,sep=""))
+## Uni-variant 
+random_effect_study_attention_univariant <- rma(yi = mean_g, sei = mean_SE, data =Data_meta_means_NDDx_summary_attention) 
+print(random_effect_study_attention_univariant,digits=3)
+predict(random_effect_study_attention_univariant)
+funnel(random_effect_study_attention_univariant)
+
+taf_attention <- trimfill(random_effect_study_attention_univariant, side = "left")
+funnel(taf_attention)
+```
